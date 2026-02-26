@@ -1,0 +1,13 @@
+{
+  "name": "autofb-electron",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "electron": "^29.4.6",
+    "googleapis": "^171.4.0",
+    "playwright": "^1.58.2"
+  }
+}
