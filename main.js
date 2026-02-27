@@ -1,22 +1,23 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { fork } = require('child_process'); // THƯ VIỆN QUẢN LÝ MULTI THREADED
+const { fork } = require('child_process');
+const { chromium } = require('playwright'); // Đã vá lỗi mở Chrome thủ công
 
 let mainWindow;
 let isRunning = false;
-let activeWorkers = {}; // Lưu trữ danh sách các công nhân đang cày
+let activeWorkers = {}; 
 
 const BASE_DATA_FOLDER = 'C:\\Playwright\\ChromeData';
 const PROFILES_FILE = 'C:\\Playwright\\profiles.json';
 
-if (!fs.existsSync('D:\\AutoSelenium')) fs.mkdirSync('D:\\AutoSelenium', { recursive: true });
+if (!fs.existsSync('C:\\Playwright')) fs.mkdirSync('C:\\Playwright', { recursive: true });
 if (!fs.existsSync(BASE_DATA_FOLDER)) fs.mkdirSync(BASE_DATA_FOLDER, { recursive: true });
 
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 700,
-        height: 900,
+        height: 950,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             nodeIntegration: false,
@@ -36,8 +37,7 @@ function sendLog(msg) {
     }
 }
 
-// ... (GIỮ NGUYÊN TOÀN BỘ CÁC HÀM XỬ LÝ JSON PROFILE CŨ: get-profiles, save-profile, delete-profile, update-profile-image, select-image) ...
-ipcMain.handle('get-profiles', () => { /* Giữ nguyên code cũ của bạn */ 
+ipcMain.handle('get-profiles', () => { 
     let profiles = {};
     if (fs.existsSync(PROFILES_FILE)) {
         try {
@@ -68,23 +68,52 @@ ipcMain.handle('delete-profile', (event, name) => { let profiles = {}; if (fs.ex
 ipcMain.handle('update-profile-image', (event, name, imagePath) => { let profiles = {}; if (fs.existsSync(PROFILES_FILE)) try { profiles = JSON.parse(fs.readFileSync(PROFILES_FILE, 'utf-8')); } catch(e){} if (profiles[name]) { profiles[name].image = imagePath; fs.writeFileSync(PROFILES_FILE, JSON.stringify(profiles, null, 4)); } return profiles; });
 ipcMain.handle('select-image', async () => { const res = await dialog.showOpenDialog(mainWindow, { properties: ['openFile'], filters: [{ name: 'Images', extensions: ['jpg', 'png', 'jpeg'] }] }); return res.canceled ? null : res.filePaths[0]; });
 
+// --- HÀM MỞ TRÌNH DUYỆT THỦ CÔNG ---
+ipcMain.on('open-manual', async (event, config) => {
+    const { profileName, proxyObj } = config;
+    sendLog(`[${profileName}] 🔓 Đang mở trình duyệt thủ công...`);
 
-// =========================================================================
-// QUẢN LÝ TIẾN TRÌNH CON (TRUE MULTI-PROCESSING)
-// =========================================================================
+    const safeName = profileName.split('').map(c => /^[\p{L}\p{N}]$/u.test(c) ? c : '_').join('');
+    const userDataDir = path.join(BASE_DATA_FOLDER, safeName);
+    if (!fs.existsSync(userDataDir)) fs.mkdirSync(userDataDir, { recursive: true });
 
+    let playwrightProxy = undefined;
+    if (proxyObj && proxyObj.ip && proxyObj.port) {
+        playwrightProxy = { server: `http://${proxyObj.ip}:${proxyObj.port}` };
+        if (proxyObj.user && proxyObj.pass) {
+            playwrightProxy.username = proxyObj.user;
+            playwrightProxy.password = proxyObj.pass;
+        }
+    }
+
+    try {
+        const browser = await chromium.launchPersistentContext(userDataDir, {
+            headless: false,
+            channel: 'chrome',
+            args: ['--disable-notifications', '--disable-dev-shm-usage', '--no-sandbox'],
+            proxy: playwrightProxy
+        });
+
+        const page = browser.pages()[0];
+        await page.goto("https://facebook.com");
+        
+        browser.on('disconnected', () => { sendLog(`[${profileName}] 🔒 Đã đóng trình duyệt thủ công.`); });
+    } catch (e) {
+        sendLog(`[${profileName}] ❌ LỖI MỞ TRÌNH DUYỆT: ${e.message}`);
+    }
+});
+
+// --- QUẢN LÝ TIẾN TRÌNH CON ---
 ipcMain.on('stop-bot', () => {
     isRunning = false;
     sendLog("🛑 Đã nhận lệnh dừng. Đang tiêu diệt toàn bộ luồng...");
-    
-    // Gửi lệnh stop hoặc Bắn bỏ trực tiếp các tiến trình đang chạy
     for (let profileName in activeWorkers) {
         if (activeWorkers[profileName]) {
-            activeWorkers[profileName].kill(); // Tiêu diệt tiến trình ngay lập tức giải phóng RAM
+            activeWorkers[profileName].kill(); 
             sendLog(`💀 Đã ngắt tiến trình [${profileName}]`);
         }
     }
-    activeWorkers = {}; // Xóa sạch danh sách
+    activeWorkers = {}; 
     mainWindow.webContents.send('state-change', false);
 });
 
@@ -93,32 +122,24 @@ ipcMain.on('start-bot', async (event, config) => {
     isRunning = true;
     mainWindow.webContents.send('state-change', true);
 
-    const { selectedProfiles, allProfilesObj, webAppUrl, minPost, maxPost } = config;
+    // Bắt thêm startTime và endTime
+    const { selectedProfiles, allProfilesObj, webAppUrl, startTime, endTime, minPost, maxPost } = config;
 
     selectedProfiles.forEach((profileName, index) => {
-        // Delay 1 phút giữa các tiến trình để tránh CPU giật lag
         setTimeout(() => {
             if (!isRunning) return;
 
-            sendLog(`🚀 Đang khởi tạo tiến trình độc lập cho [${profileName}]...`);
-            
-            // TẠO TIẾN TRÌNH CON ĐỘC LẬP TỪ FILE worker.js
+            sendLog(`🚀 Đang khởi tạo tiến trình cho [${profileName}]...`);
             const worker = fork(path.join(__dirname, 'worker.js'));
             activeWorkers[profileName] = worker;
 
-            // Lắng nghe log từ tiến trình con gửi lên
             worker.on('message', (message) => {
-                if (message.type === 'log') {
-                    sendLog(`[${profileName}] ${message.msg}`);
-                }
+                if (message.type === 'log') sendLog(`[${profileName}] ${message.msg}`);
             });
 
-            // Nếu tiến trình con bị crash hoặc tự đóng
             worker.on('exit', (code) => {
-                sendLog(`[${profileName}] Tiến trình đã kết thúc (Code: ${code}). RAM đã được giải phóng.`);
+                sendLog(`[${profileName}] Tiến trình đã kết thúc. RAM đã được giải phóng.`);
                 delete activeWorkers[profileName];
-                
-                // Nếu tất cả tiến trình đều chết, báo UI dừng lại
                 if (Object.keys(activeWorkers).length === 0) {
                     isRunning = false;
                     mainWindow.webContents.send('state-change', false);
@@ -126,7 +147,6 @@ ipcMain.on('start-bot', async (event, config) => {
                 }
             });
 
-            // Truyền cấu hình và ra lệnh cho tiến trình con bắt đầu chạy
             worker.send({
                 type: 'start',
                 config: {
@@ -134,12 +154,14 @@ ipcMain.on('start-bot', async (event, config) => {
                     proxyObj: allProfilesObj[profileName]?.proxy,
                     profileImage: allProfilesObj[profileName]?.image,
                     webAppUrl: webAppUrl,
+                    startTime: startTime, // Truyền xuống Worker
+                    endTime: endTime,     // Truyền xuống Worker
                     minPost: minPost,
                     maxPost: maxPost,
                     BASE_DATA_FOLDER: BASE_DATA_FOLDER
                 }
             });
 
-        }, index * 60000); // So le 60 giây
+        }, index * 30000); 
     });
 });

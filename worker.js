@@ -16,6 +16,25 @@ async function smartSleep(ms) {
     }
 }
 
+function checkTimeAllowed(startStr, endStr) {
+    if (!startStr || !endStr) return true; 
+    
+    const now = new Date();
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    
+    const [sH, sM] = startStr.split(':').map(Number);
+    const startMins = sH * 60 + sM;
+    
+    const [eH, eM] = endStr.split(':').map(Number);
+    const endMins = eH * 60 + eM;
+    
+    if (startMins <= endMins) {
+        return currentMins >= startMins && currentMins <= endMins;
+    } else {
+        return currentMins >= startMins || currentMins <= endMins;
+    }
+}
+
 process.on('message', async (message) => {
     if (message.type === 'start') {
         await runBot(message.config);
@@ -31,7 +50,7 @@ process.on('uncaughtException', (err) => {
 });
 
 async function runBot(config) {
-    const { profileName, proxyObj, profileImage, webAppUrl, minPost, maxPost, BASE_DATA_FOLDER } = config;
+    const { profileName, proxyObj, profileImage, webAppUrl, startTime, endTime, minPost, maxPost, BASE_DATA_FOLDER } = config;
 
     const safeName = profileName.split('').map(c => /^[\p{L}\p{N}]$/u.test(c) ? c : '_').join('');
     const userDataDir = path.join(BASE_DATA_FOLDER, safeName);
@@ -49,6 +68,12 @@ async function runBot(config) {
     let cycle = 1;
 
     while (isRunning) {
+        if (!checkTimeAllowed(startTime, endTime)) {
+            sendLog(`🌙 Ngoài giờ hoạt động (${startTime} - ${endTime}). Ngủ 10 phút...`);
+            await smartSleep(600000); 
+            continue;
+        }
+
         sendLog(`🔄 Đang kéo Data từ Google Sheet (Vòng ${cycle})...`);
         let sheetData;
         
@@ -96,25 +121,52 @@ async function runBot(config) {
 
             for (let i = 0; i < links.length; i++) {
                 if (!isRunning) break;
+                
+                if (!checkTimeAllowed(startTime, endTime)) {
+                    sendLog(`⏳ Tới giờ nghỉ ngơi. Tạm dừng việc comment lại.`);
+                    break; 
+                }
+
                 let link = links[i];
 
                 try {
                     sendLog(`-> Link ${i+1}/${links.length}: ${link}`);
                     try { await page.goto(link, { timeout: 60000 }); } catch(e) { } 
                     
-                    // Cuộn nhẹ xuống để Facebook render khung comment
-                    await page.evaluate(() => window.scrollBy(0, 400));
-                    await smartSleep(Math.floor(Math.random() * 3000) + 4000);
+                    await smartSleep(2000); 
+                    
+                    const scrollTimes = Math.floor(Math.random() * 3) + 2; 
+                    for(let step = 0; step < scrollTimes; step++) {
+                        let scrollY = Math.floor(Math.random() * 400) + 200;
+                        try { await page.evaluate((y) => window.scrollBy({ top: y, behavior: 'smooth' }), scrollY); } catch(e){}
+                        await smartSleep(Math.floor(Math.random() * 2000) + 1000);
+                    }
+                    if (Math.random() < 0.3) { 
+                        try { await page.evaluate(() => window.scrollBy({ top: -300, behavior: 'smooth' })); } catch(e){}
+                        await smartSleep(1500);
+                    }
+                    
                     if (!isRunning) break;
 
-                    const closeBtns = await page.$$('div[aria-label="Đóng đoạn chat"]');
-                    for (let btn of closeBtns) await btn.click({ force: true }).catch(() => {});
+                    const closeChatSelectors = [
+                        'div[aria-label="Đóng đoạn chat"]', 
+                        'div[aria-label="Close chat"]'
+                    ];
+                    for (let sel of closeChatSelectors) {
+                        try {
+                            const btns = await page.$$(sel);
+                            for (let btn of btns) await btn.click({ force: true }).catch(() => {});
+                        } catch (e) {}
+                    }
+                    await smartSleep(1000);
 
+                    // XÁC ĐỊNH CHẾ ĐỘ COMMENT
                     let mode = "TEXT";
                     if (profileImage && commonComments.length > 0) {
                         mode = (Math.random() * 100 <= 10) ? (Math.random() > 0.5 ? "IMG" : "BOTH") : "TEXT";
                     } else if (profileImage) mode = "IMG";
 
+                    // 1. UP ẢNH (NẾU CÓ)
                     if (mode === "IMG" || mode === "BOTH") {
                         try {
                             const fileInput = page.locator("input[type='file']").last();
@@ -126,83 +178,60 @@ async function runBot(config) {
 
                     if (!isRunning) break;
 
-                    if (mode === "TEXT" || mode === "BOTH") {
-                        const comment = commonComments[Math.floor(Math.random() * commonComments.length)];
-                        
-                        // ==============================================================
-                        // LOGIC BẮT Ô COMMENT CHUẨN TỪ CODE PYTHON
-                        // ==============================================================
-                        let targetBox = null;
+                    // 2. LUÔN LUÔN TÌM Ô COMMENT ĐỂ SUBMIT (Dù là TEXT hay IMG)
+                    const comment = commonComments.length > 0 ? commonComments[Math.floor(Math.random() * commonComments.length)] : "";
+                    let targetBox = null;
 
-                        // Bước 1: Thử click nút comment để kích hoạt box (y hệt bản Python)
-                        const commentBtnSelectors = [
-                            'div[aria-label="Viết bình luận"]',
-                            'div[aria-label="Bình luận"]',
-                            'div[aria-label="Comment"]'
-                        ];
-                        for (const btnSel of commentBtnSelectors) {
-                            try {
-                                const btn = page.locator(btnSel).last();
-                                if (await btn.isVisible({ timeout: 2000 })) {
-                                    await btn.click({ timeout: 2000 });
-                                    await smartSleep(1000);
-                                    break;
-                                }
-                            } catch(e) {}
-                        }
-
-                        // Bước 2: Tìm ô comment bằng mảng Selector
-                        const selectors = [
-                            'div[role="textbox"][aria-label*="Viết bình luận"]',
-                            'div[role="textbox"][aria-label*="Write a comment"]',
-                            'div[role="textbox"][contenteditable="true"]'
-                        ];
-
-                        for (const sel of selectors) {
-                            try {
-                                // Luôn lấy thẻ cuối cùng khớp điều kiện
-                                const box = page.locator(sel).last();
-                                await box.waitFor({ state: "visible", timeout: 5000 });
-                                
-                                // Scroll đến box y hệt Python (scrollIntoView)
-                                await box.scrollIntoViewIfNeeded();
-                                
-                                targetBox = box;
-                                break; // Tìm thấy thì bẻ gãy vòng lặp ngay
-                            } catch (e) {
-                                continue; // Không thấy thì thử selector tiếp theo
-                            }
-                        }
-
-                        if (!targetBox) {
-                            throw new Error("Không tìm thấy ô comment!");
-                        }
-
-                        // Bước 3: Focus và gửi
+                    const commentBtnSelectors = ['div[aria-label="Viết bình luận"]', 'div[aria-label="Bình luận"]', 'div[aria-label="Comment"]'];
+                    for (const btnSel of commentBtnSelectors) {
                         try {
-                            await targetBox.click(); // Click để kích hoạt con trỏ chuột
-                            await smartSleep(1000);
-                            
-                            if(comment) await targetBox.fill(comment);
-                            sendLog(`✍️ Đã nhập comment.`);
-                            await smartSleep(1000);
-                            
-                            await page.keyboard.press("Enter");
-                            await smartSleep(2000);
-
-                            // Backup: Nút gửi (mũi tên xanh)
-                            const sendBtn = page.locator('div[aria-label="Bình luận"], div[aria-label="Comment"]').last();
-                            if (await sendBtn.isVisible({ timeout: 2000 })) {
-                                await sendBtn.click({ force: true });
-                            }
-                            sendLog(`✅ Xong.`);
-                        } catch (error) { 
-                            sendLog(`⚠️ Bỏ qua: Lỗi trong quá trình nhập liệu.`); 
-                        }
+                            const btn = page.locator(btnSel).last();
+                            if (await btn.isVisible({ timeout: 2000 })) { await btn.click({ timeout: 2000 }); await smartSleep(1000); break; }
+                        } catch(e) {}
                     }
+
+                    const selectors = [
+                        'div[role="textbox"][aria-label*="Viết bình luận"]', 
+                        'div[role="textbox"][aria-label*="Write a comment"]', 
+                        'div[role="textbox"][contenteditable="true"]:not([aria-label*="Tin nhắn"]):not([aria-label*="Message"])'
+                    ];
+                    
+                    for (const sel of selectors) {
+                        try {
+                            const box = page.locator(sel).last();
+                            await box.waitFor({ state: "visible", timeout: 5000 });
+                            await box.scrollIntoViewIfNeeded();
+                            targetBox = box;
+                            break;
+                        } catch (e) { continue; }
+                    }
+
+                    if (!targetBox) throw new Error("Không tìm thấy ô comment!");
+
+                    try {
+                        await targetBox.click();
+                        await smartSleep(1000);
+                        
+                        // CHỈ GÕ CHỮ NẾU MODE KHÔNG PHẢI LÀ "CHỈ ẢNH"
+                        if (mode !== "IMG" && comment) {
+                            sendLog(`✍️ Đang gõ comment...`);
+                            const typingDelay = Math.floor(Math.random() * (120 - 40 + 1)) + 40;
+                            await targetBox.pressSequentially(comment, { delay: typingDelay });
+                            await smartSleep(1000);
+                        }
+                        
+                        // LUÔN LUÔN NHẤN ENTER ĐỂ GỬI (Bất kể có gõ chữ hay không)
+                        await page.keyboard.press("Enter");
+                        await smartSleep(2000);
+
+                        // Backup: Click nút Gửi
+                        const sendBtn = page.locator('div[aria-label="Bình luận"], div[aria-label="Comment"]').last();
+                        if (await sendBtn.isVisible({ timeout: 2000 })) await sendBtn.click({ force: true });
+                        sendLog(`✅ Xong.`);
+                    } catch (error) { sendLog(`⚠️ Bỏ qua: Lỗi trong quá trình nhập liệu/gửi bài.`); }
                     
                     if (i < links.length - 1 && isRunning) {
-                        const waitTime = Math.floor(Math.random() * (maxPost - minPost + 1) + minPost) * 60;
+                        const waitTime = Math.floor(Math.random() * (maxPost - minPost + 1) + minPost);
                         sendLog(`⏳ Nghỉ ${waitTime}s...`);
                         await smartSleep(waitTime * 1000);
                     }
