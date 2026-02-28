@@ -1,7 +1,10 @@
 # FB Automation
 
 Bot tự động comment Facebook đa luồng, chạy trên Electron + Playwright.
+
+============
 Note: Project được xây dựng cho mục đích cá nhân, việc triển khai code được thực hiện với sự hỗ trợ của các công cụ AI
+============
 ---
 
 ## 📁 Cấu trúc dự án
