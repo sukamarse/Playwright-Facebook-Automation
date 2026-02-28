@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FB Automation v2</title>
+<style>
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #f0f2f5;
+    --surface:  #ffffff;
+    --border:   #dde1e7;
+    --text:     #1c1e21;
+    --text-sub: #65676b;
+    --primary:  #1877f2;
+    --green:    #23a55a;
+    --red:      #f02849;
+    --orange:   #e7a217;
+    --purple:   #8b5cf6;
+    --radius:   10px;
+    --shadow:   0 2px 8px rgba(0,0,0,.08);
+  }
+
+  body {
+    font-family: -apple-system, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    padding: 16px;
+    user-select: none;
+  }
+
+  /* ── Header ── */
+  .header {
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .header h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--primary);
+  }
+  .header small {
+    color: var(--text-sub);
+    font-size: 11px;
+  }
+
+  /* ── Card ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow);
+  }
+  .card-title {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text-sub);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* ── Form controls ── */
+  input, select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    background: #f7f8fa;
+    color: var(--text);
+    outline: none;
+    transition: border .15s;
+  }
+  input:focus { border-color: var(--primary); background: #fff; }
+  input[type=number] { width: 70px; text-align: center; }
+  input[type=time]   { width: 80px; font-weight: 700; }
+
+  label.field-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-sub);
+    margin-bottom: 4px;
+  }
+
+  /* ── Buttons ── */
+  button {
+    border: none;
+    border-radius: 6px;
+    padding: 7px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .15s, transform .1s;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  button:hover  { opacity: .88; }
+  button:active { transform: scale(.97); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+
+  .btn-primary   { background: var(--primary); }
+  .btn-green     { background: var(--green);   }
+  .btn-red       { background: var(--red);     }
+  .btn-orange    { background: var(--orange);  }
+  .btn-gray      { background: #adb5bd; }
+  .btn-purple    { background: var(--purple);  }
+  .btn-block     { width: 100%; justify-content: center; font-size: 15px; padding: 11px; }
+
+  /* ── Profile list ── */
+  #profileList {
+    max-height: 260px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fafbfc;
+  }
+  .profile-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 10px;
+    border-bottom: 1px solid #eef0f3;
+    transition: background .1s;
+  }
+  .profile-row:last-child { border-bottom: none; }
+  .profile-row:hover { background: #f0f4ff; }
+
+  .profile-check  { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; accent-color: var(--primary); }
+  .profile-name   { flex: 1; font-weight: 600; font-size: 13px; cursor: pointer; }
+  .badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 20px;
+    color: #fff;
+  }
+  .badge-proxy { background: var(--purple); }
+  .badge-direct { background: #adb5bd; }
+
+  .profile-status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #adb5bd;
+    flex-shrink: 0;
+    transition: background .3s;
+  }
+  .dot-running  { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 1.5s infinite; }
+  .dot-paused   { background: var(--orange); }
+  .dot-sleeping { background: var(--primary); }
+  .dot-error    { background: var(--red); }
+  .dot-stopped  { background: #adb5bd; }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; } 50% { opacity: .4; }
+  }
+
+  .profile-img-label {
+    font-size: 11px;
+    color: var(--text-sub);
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── Grid ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .flex    { display: flex; gap: 8px; align-items: center; }
+  .flex-between { display: flex; justify-content: space-between; align-items: center; }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.5);
+    z-index: 999;
+    justify-content: center;
+    align-items: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 20px;
+    width: 340px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.18);
+  }
+  .modal-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 16px;
+  }
+  .modal-field { margin-bottom: 12px; }
+
+  /* ── Log ── */
+  #log {
+    background: #0d1117;
+    color: #58d68d;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 12px;
+    height: 200px;
+    overflow-y: scroll;
+    padding: 10px 12px;
+    border-radius: 8px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    border: 1px solid #30363d;
+  }
+  #log .log-err  { color: #ff7b72; }
+  #log .log-warn { color: #ffa657; }
+  #log .log-ok   { color: #56d364; }
+  #log .log-info { color: #79c0ff; }
+
+  .log-controls {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  /* ── Toolbar ── */
+  .profile-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  /* ── Section index ── */
+  .section-index {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px; height: 20px;
+    background: var(--primary);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<div class="header">
+  <h1>⚡ FB Automation v2</h1>
+  <small>Powered by Playwright &nbsp;|&nbsp; Rebuilt by Claude for reliability</small>
+</div>
+
+<!-- ── 1. PROFILES ── -->
+<div class="card">
+  <div class="card-title"><span class="section-index">1</span> Quản lý Profile & Đăng nhập</div>
+  <div class="profile-toolbar">
+    <div class="flex">
+      <button class="btn-green" onclick="showAddModal()">➕ Thêm</button>
+      <button class="btn-red"   onclick="deleteSelected()">🗑 Xóa</button>
+      <button class="btn-gray"  onclick="toggleSelectAll()" id="btnSelectAll">☑ Chọn tất</button>
+    </div>
+    <small id="profileCount" style="color:var(--text-sub)">0 profile</small>
+  </div>
+  <div id="profileList"></div>
+</div>
+
+<!-- ── ADD MODAL ── -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal-box">
+    <div class="modal-title">➕ Thêm Profile mới</div>
+
+    <div class="modal-field">
+      <label class="field-label">Tên Profile</label>
+      <input type="text" id="pName" placeholder="Nick 1, Account A...">
+    </div>
+
+    <div class="modal-title" style="font-size:13px; margin-bottom:10px; color:var(--purple)">🔒 Proxy (Tùy chọn)</div>
+    <div class="grid-2" style="margin-bottom:10px">
+      <div><label class="field-label">IP / Host</label><input type="text" id="pIp" placeholder="127.0.0.1"></div>
+      <div><label class="field-label">Port</label><input type="text" id="pPort" placeholder="8080"></div>
+    </div>
+    <div class="grid-2" style="margin-bottom:18px">
+      <div><label class="field-label">Username</label><input type="text" id="pUser" placeholder="Tùy chọn"></div>
+      <div><label class="field-label">Password</label><input type="text" id="pPass" placeholder="Tùy chọn"></div>
+    </div>
+
+    <div class="flex">
+      <button class="btn-green" onclick="confirmAdd()" style="flex:1">💾 Lưu lại</button>
+      <button class="btn-red"   onclick="closeModal()" style="flex:1">✖ Hủy</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 2. DATA SOURCE ── -->
+<div class="card">
+  <div class="card-title"><span class="section-index">2</span> Nguồn Data (Google Apps Script)</div>
+  <label class="field-label">URL Google Apps Script</label>
+  <input type="text" id="webAppUrl" placeholder="https://script.google.com/macros/s/AKfycb.../exec">
+</div>
+
+<!-- ── 3. SCHEDULE ── -->
+<div class="card">
+  <div class="card-title"><span class="section-index">3</span> Rountines</div>
+
+  <div class="flex" style="margin-bottom:14px; flex-wrap:wrap; gap:14px">
+    <div>
+      <label class="field-label">🕐 Giờ bắt đầu</label>
+      <input type="text" id="startTime" value="06:45" maxlength="5" style="width:85px; font-weight:700; font-size:15px; text-align:center">
+    </div>
+    <div style="align-self:flex-end; padding-bottom:8px; color:var(--text-sub); font-weight:700">đến</div>
+    <div>
+      <label class="field-label">🕐 Giờ kết thúc</label>
+      <input type="text" id="endTime" value="00:30" maxlength="5" style="width:85px; font-weight:700; font-size:15px; text-align:center">
+    </div>
+    <div style="align-self:flex-end; padding-bottom:6px">
+      <small style="color:var(--text-sub)">Format 24h, VD: 00:30</small>
+    </div>
+  </div>
+
+  <div class="flex" style="flex-wrap:wrap; gap:14px">
+    <div>
+      <label class="field-label">⏳ Nghỉ giữa các Post (giây)</label>
+      <div class="flex">
+        <input type="number" id="minPost" value="180">
+        <span style="color:var(--text-sub); font-weight:700">–</span>
+        <input type="number" id="maxPost" value="360">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 4. CONTROLS ── -->
+<div class="flex" style="margin-bottom:12px; gap:8px">
+  <button id="btnStart" class="btn-primary btn-block" onclick="startBot()" style="flex:3">
+    ▶ BẮT ĐẦU CHẠY ĐA LUỒNG
+  </button>
+  <button id="btnStop" class="btn-red btn-block" onclick="stopBot()" disabled style="flex:1">
+    ⏹ DỪNG
+  </button>
+</div>
+
+<!-- ── 5. LOG ── -->
+<div class="card" style="padding:12px">
+  <div class="flex-between" style="margin-bottom:8px">
+    <div class="card-title" style="margin:0"><span class="section-index" style="background:var(--text-sub)">5</span> Nhật ký hoạt động</div>
+    <div class="log-controls">
+      <button class="btn-gray"   onclick="clearLog()"       style="font-size:11px; padding:4px 8px">🗑 Xóa</button>
+      <button class="btn-primary" onclick="openLogFolder()" style="font-size:11px; padding:4px 8px">📁 Mở thư mục log</button>
+    </div>
+  </div>
+  <div id="log"></div>
+</div>
+
+<!-- ───────────────────────────────────────── -->
+<script>
+'use strict';
+
+// ── State ──────────────────────────────────────────
+let profiles = {};
+let allSelected = false;
+
+// ── Init ───────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+    restoreSettings();
+    profiles = await window.api.getProfiles();
+    renderProfiles();
+    registerEvents();
+});
+
+window.addEventListener('beforeunload', () => {
+    window.api.removeAllListeners?.();
+    saveSettings();
+});
+
+// ── Settings persistence ───────────────────────────
+function saveSettings() {
+    const s = {
+        webAppUrl: $('webAppUrl').value,
+        startTime: $('startTime').value,
+        endTime:   $('endTime').value,
+        minPost:   $('minPost').value,
+        maxPost:   $('maxPost').value,
+    };
+    localStorage.setItem('fbAutomationSettings', JSON.stringify(s));
+}
+
+function restoreSettings() {
+    try {
+        const s = JSON.parse(localStorage.getItem('fbAutomationSettings') || '{}');
+        if (s.webAppUrl) $('webAppUrl').value = s.webAppUrl;
+        if (s.startTime) $('startTime').value = s.startTime;
+        if (s.endTime)   $('endTime').value   = s.endTime;
+        if (s.minPost)   $('minPost').value   = s.minPost;
+        if (s.maxPost)   $('maxPost').value   = s.maxPost;
+    } catch (_) {}
+}
+
+// ── Events ─────────────────────────────────────────
+function registerEvents() {
+    window.api.onLog(appendLog);
+
+    window.api.onStateChange(isRunning => {
+        $('btnStart').disabled = isRunning;
+        $('btnStop').disabled  = !isRunning;
+        $('btnStart').style.opacity = isRunning ? '.5' : '1';
+    });
+
+    window.api.onProfileStatus((profileName, status) => {
+        const dot = document.querySelector(`.dot[data-profile="${profileName}"]`);
+        if (dot) {
+            dot.className = `profile-status-dot dot dot-${status}`;
+            dot.title = status;
+        }
+    });
+}
+
+// ── Profile rendering ──────────────────────────────
+function renderProfiles() {
+    const list = $('profileList');
+    const names = Object.keys(profiles);
+    $('profileCount').textContent = `${names.length} profile`;
+
+    if (names.length === 0) {
+        list.innerHTML = `<div style="padding:20px; text-align:center; color:var(--text-sub); font-size:13px">
+            Chưa có profile nào. Nhấn ➕ Thêm để bắt đầu.
+        </div>`;
+        return;
+    }
+
+    list.innerHTML = names.map(name => {
+        const p = profiles[name];
+        const hasProxy = p.proxy?.ip;
+        const imgFile  = p.image ? p.image.split(/[\\/]/).pop() : null;
+
+        return `
+        <div class="profile-row" data-profile-name="${name}">
+            <span class="profile-status-dot dot dot-stopped" data-profile="${name}" title="stopped"></span>
+            <input type="checkbox" class="profile-check" value="${name}">
+            <span class="profile-name" onclick="toggleCheck(this)">${name}</span>
+            <span class="badge ${hasProxy ? 'badge-proxy' : 'badge-direct'}">${hasProxy ? 'Proxy' : 'Gốc'}</span>
+            <span class="profile-img-label" title="${p.image || ''}" style="color:${imgFile ? 'var(--green)' : 'var(--text-sub)'}">
+                ${imgFile ? '🖼 '+imgFile : 'Chưa có ảnh'}
+            </span>
+            <button onclick="pickImage('${name}')" class="btn-orange" style="font-size:11px; padding:4px 8px">🖼 Đổi</button>
+            ${imgFile ? `<button onclick="removeImage('${name}')" class="btn-red" style="font-size:11px; padding:4px 8px">✖ Xóa ảnh</button>` : ''}
+            <button onclick="openManual('${name}')" class="btn-primary" style="font-size:11px; padding:4px 8px">🌐 Mở</button>
+        </div>`;
+    }).join('');
+}
+
+function toggleCheck(nameSpan) {
+    const row   = nameSpan.closest('.profile-row');
+    const check = row.querySelector('.profile-check');
+    check.checked = !check.checked;
+}
+
+function toggleSelectAll() {
+    allSelected = !allSelected;
+    document.querySelectorAll('.profile-check').forEach(cb => cb.checked = allSelected);
+    $('btnSelectAll').textContent = allSelected ? '☐ Bỏ chọn tất' : '☑ Chọn tất';
+}
+
+// ── Profile CRUD ───────────────────────────────────
+function showAddModal() {
+    ['pName','pIp','pPort','pUser','pPass'].forEach(id => $(id).value = '');
+    $('addModal').classList.add('open');
+    setTimeout(() => $('pName').focus(), 100);
+}
+function closeModal()  { $('addModal').classList.remove('open'); }
+
+async function confirmAdd() {
+    const name = $('pName').value.trim();
+    if (!name)         return alert('Vui lòng nhập tên Profile!');
+    if (profiles[name]) return alert('Tên Profile này đã tồn tại!');
+
+    const proxy = {
+        ip:   $('pIp').value.trim(),
+        port: $('pPort').value.trim(),
+        user: $('pUser').value.trim(),
+        pass: $('pPass').value.trim(),
+    };
+
+    profiles = await window.api.saveProfile(name, proxy);
+    renderProfiles();
+    closeModal();
+}
+
+async function deleteSelected() {
+    const selected = getSelectedProfiles();
+    if (!selected.length) return alert('Hãy tick chọn profile cần xóa!');
+    if (!confirm(`Xóa ${selected.length} profile khỏi danh sách?\n(Dữ liệu Chrome vẫn giữ nguyên)`)) return;
+    for (const name of selected) profiles = await window.api.deleteProfile(name);
+    renderProfiles();
+}
+
+async function removeImage(name) {
+    profiles = await window.api.updateProfileImage(name, null);
+    renderProfiles();
+}
+
+async function pickImage(name) {
+    const imgPath = await window.api.selectImage();
+    if (imgPath) {
+        profiles = await window.api.updateProfileImage(name, imgPath);
+        renderProfiles();
+    }
+}
+
+function openManual(name) {
+    window.api.openManual({ profileName: name, proxyObj: profiles[name]?.proxy });
+}
+
+// ── Bot control ────────────────────────────────────
+function startBot() {
+    const selectedProfiles = getSelectedProfiles();
+    if (!selectedProfiles.length) return alert('Vui lòng tick chọn ít nhất 1 Profile!');
+
+    const webAppUrl = $('webAppUrl').value.trim();
+    if (!webAppUrl.startsWith('https://script.google.com/')) {
+        return alert('URL Google Apps Script không hợp lệ.\nVui lòng dán đúng URL từ Google Script.');
+    }
+
+    saveSettings();
+
+    window.api.startBot({
+        selectedProfiles,
+        allProfilesObj: profiles,
+        webAppUrl,
+        startTime: $('startTime').value,
+        endTime:   $('endTime').value,
+        minPost:   parseInt($('minPost').value) || 180,
+        maxPost:   parseInt($('maxPost').value) || 360,
+    });
+}
+
+function stopBot() {
+    if (confirm('Dừng tất cả tiến trình đang chạy?')) {
+        window.api.stopBot();
+    }
+}
+
+// ── Log ────────────────────────────────────────────
+const LOG_MAX_LINES = 500;
+let logLines = [];
+
+function appendLog(msg) {
+    logLines.push(msg);
+    if (logLines.length > LOG_MAX_LINES) logLines.shift();
+
+    const el = $('log');
+    const line = document.createElement('div');
+
+    if      (msg.includes('❌') || msg.includes('💥') || msg.includes('LỖI') || msg.includes('ERROR')) line.className = 'log-err';
+    else if (msg.includes('⚠️') || msg.includes('WARN')) line.className = 'log-warn';
+    else if (msg.includes('✅') || msg.includes('🎉') || msg.includes('OK'))  line.className = 'log-ok';
+    else if (msg.includes('🔄') || msg.includes('🌐') || msg.includes('🚀'))  line.className = 'log-info';
+
+    line.textContent = msg;
+    el.appendChild(line);
+
+    // Auto-scroll nếu user đang ở cuối
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+    if (nearBottom) el.scrollTop = el.scrollHeight;
+}
+
+function clearLog() {
+    logLines = [];
+    $('log').innerHTML = '';
+}
+
+function openLogFolder() {
+    window.api.openLogFolder();
+}
+
+// ── Utils ───────────────────────────────────────────
+function $(id) { return document.getElementById(id); }
+
+function getSelectedProfiles() {
+    return Array.from(document.querySelectorAll('.profile-check:checked')).map(cb => cb.value);
+}
+
+// ESC closes modal
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeModal();
+});
+
+// Click outside modal closes it
+$('addModal').addEventListener('click', e => {
+    if (e.target === $('addModal')) closeModal();
+});
+</script>
+</body>
+</html>
