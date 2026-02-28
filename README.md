@@ -1,19 +1,24 @@
-# FB Automation v2 — Hướng dẫn cài đặt
+# FB Automation v2
+
+Bot tự động comment Facebook đa luồng, chạy trên Electron + Playwright.
+
+---
 
 ## 📁 Cấu trúc dự án
 
 ```
 fb-automation/
 ├── package.json
+├── AppScript.js          ← Code dán vào Google Apps Script
 ├── src/
-│   ├── main.js         ← Electron main process
-│   ├── preload.js      ← IPC bridge (security layer)
-│   └── worker.js       ← Bot logic (1 tiến trình / profile)
-├── ui/
-│   └── index.html      ← Giao diện người dùng
-└── assets/
-    └── icon.png        ← (Tùy chọn) Icon app
+│   ├── main.js           ← Electron main process
+│   ├── preload.js        ← IPC bridge
+│   └── worker.js         ← Bot logic (1 tiến trình / profile)
+└── ui/
+    └── index.html        ← Giao diện
 ```
+
+---
 
 ## ⚙️ Cài đặt
 
@@ -24,66 +29,144 @@ cd fb-automation
 # 2. Cài dependencies
 npm install
 
-# 3. Cài Playwright browsers (chỉ cần 1 lần)
-npx playwright install chromium
-
-# 4. Chạy app
+# 3. Chạy app
 npm start
 ```
 
-## 📂 Dữ liệu lưu ở đâu?
+> Yêu cầu máy đã cài **Google Chrome** vì bot dùng `channel: 'chrome'`.
 
-Toàn bộ dữ liệu được lưu tự động trong thư mục AppData của user hiện tại:
+---
+
+## 📂 Dữ liệu lưu ở đâu
+
+Tất cả cố định tại `C:\Playwright\`:
 
 ```
-Windows:  C:\Users\<TênUser>\AppData\Roaming\fb-automation-v2\FB_Automation\
-  ├── profiles.json       ← Danh sách profile
-  ├── ChromeData\         ← Cookie/session Chrome của từng profile
-  └── Logs\
-        ├── 2025-01-15.log
-        ├── 2025-01-16.log
-        └── ...
+C:\Playwright\
+├── profiles.json          ← Danh sách profile + proxy + đường dẫn ảnh
+├── ChromeData\
+│   ├── Nick1\             ← Session Chrome của profile "Nick1"
+│   ├── Trang\
+│   └── ...
+└── Logs\
+    ├── 2025-01-15.log
+    ├── 2025-01-16.log
+    └── ...
 ```
 
-> **Không còn hardcode ổ C** — dùng được trên mọi máy.
+Log được **buffer trong RAM** và ghi ra HDD mỗi **15 phút** (hoặc khi tích lũy 200 dòng) để giảm số lần HDD spin-up.
 
-## 🆕 Tính năng mới so với v1
+---
 
-| Tính năng | v1 | v2 |
+## 🗂️ Cấu trúc Google Sheet
+
+Mỗi sheet = 1 profile. Tên sheet phải **khớp chính xác** với tên profile trong app.
+
+| Cột A | Cột B | Cột I |
 |---|---|---|
-| Phát hiện session hết hạn | ❌ | ✅ Tự động check + báo |
-| Log file theo ngày | ❌ | ✅ Tự động lưu .log |
-| Pause / Resume từng profile | ❌ | ✅ |
-| Status dot từng profile | ❌ | ✅ Màu real-time |
-| Retry thông minh (backoff) | ❌ | ✅ Tối đa 5 lần |
-| fetch() timeout | ❌ | ✅ 30 giây |
-| Validate schema Sheet | ❌ | ✅ |
-| Smart comment box (4 lớp chống nhầm Messenger) | ❌ | ✅ |
-| Path động (không hardcode ổ C) | ❌ | ✅ |
-| Profile folder collision-free | ❌ | ✅ Hash suffix |
-| Color-coded log | ❌ | ✅ |
-| Graceful shutdown | ❌ | ✅ |
+| Link Facebook | Status (tự động) | Timestamp lần cuối fetch |
+| https://fb.com/... | _(trống)_ | 🕐 Lần cuối fetch: ... |
+| https://fb.com/... | FAIL | |
 
-## 📋 Format Google Apps Script
+Sheet đặc biệt tên **`comments`** (viết thường) chứa danh sách nội dung comment, mỗi dòng 1 câu.
 
-API cần trả về JSON theo cấu trúc:
+Sheet nào tên bắt đầu bằng `_` sẽ bị bỏ qua (dùng để ghi chú / config).
 
-```json
-{
-  "profiles": {
-    "Nick 1": ["https://fb.com/...", "https://fb.com/..."],
-    "Nick 2": ["https://fb.com/..."]
-  },
-  "comments": [
-    "Comment mẫu 1",
-    "Comment mẫu 2",
-    "Comment mẫu 3"
-  ]
-}
+---
+
+## 🔌 Cài đặt Google Apps Script
+
+1. Mở Google Sheet → **Extensions → Apps Script**
+2. Xóa toàn bộ code mặc định, dán nội dung file `AppScript.js` vào
+3. **Deploy → New deployment → Web app**
+   - Execute as: **Me**
+   - Who has access: **Anyone**
+4. Copy URL deployment dán vào ô URL trong app
+5. Khi cập nhật script: **Deploy → Manage deployments → Edit → New version → Deploy**
+
+---
+
+## 🚀 Hướng dẫn sử dụng
+
+### Lần đầu (đăng nhập)
+1. Thêm profile → nhấn **🌐 Mở** → đăng nhập Facebook trong cửa sổ mở ra → đóng lại
+2. Lặp lại cho từng profile
+
+### Chạy bot
+1. Tick chọn các profile muốn chạy
+2. Dán URL Google Apps Script
+3. Cài khung giờ hoạt động và thời gian nghỉ giữa các post
+4. Nhấn **▶ BẮT ĐẦU CHẠY ĐA LUỒNG**
+
+### Gán ảnh cho profile
+Nhấn **🖼 Đổi** cạnh tên profile → chọn ảnh JPG/PNG. Bot sẽ đính kèm ảnh vào comment theo xác suất ngẫu nhiên.
+
+---
+
+## ⚡ Tính năng
+
+### Bot
+- **Đa luồng** — mỗi profile chạy tiến trình riêng biệt, độc lập hoàn toàn
+- **Stagger khởi động** — delay 30 giây giữa các profile, tránh spike CPU
+- **Khung giờ hoạt động** — tự ngủ ngoài giờ, hỗ trợ overnight (VD: 23:00–06:00)
+- **Pause / Resume** từng profile riêng lẻ
+- **Status dot** màu real-time trên từng profile (🟢 running / 🟡 paused / 🔵 sleeping / 🔴 error)
+- **Smart comment box** — 4 lớp bảo vệ tránh nhầm vào Messenger dock
+- **Tự đóng chat popup** trước khi comment
+- **3 mode comment**: chỉ text / chỉ ảnh / text + ảnh
+
+### Reliability
+- **Auto detect session hết hạn** — dừng ngay và báo thay vì chạy vô ích
+- **Retry với backoff** — lỗi fetch Sheet thử lại tối đa 5 lần (2→4→6→...30 phút)
+- **Fail tracking 2 vòng** — link fail 1 lần chưa ghi, fail 2 vòng liên tiếp mới ghi FAIL lên Sheet
+- **Reset fail memory** khi data Sheet thay đổi
+- **Graceful shutdown** — gửi stop, đợi Chrome đóng sạch trước khi force kill
+
+### Tiết kiệm tài nguyên
+- **sleepLong() chunk 30s** cho các quãng ngủ dài (ngủ giữa vòng, chờ data, ngoài giờ)
+- **setStatus dedup** — không gửi IPC nếu trạng thái không đổi
+- **Log buffer 15 phút** — HDD chỉ bị ghi tối đa 4 lần/giờ
+- **Chrome flags** giảm GPU compositing và giới hạn V8 heap 256MB/tab
+
+---
+
+## 🔄 Luồng hoạt động
+
+```
+Khởi động worker
+      ↓
+Fetch data từ Google Sheet
+      ↓
+Mở Chrome → Check session
+      ↓
+Lặp qua từng link:
+  → Scroll + đóng chat popup
+  → Tìm ô comment (loại trừ Messenger)
+  → Upload ảnh (nếu có)
+  → Gõ comment + gửi
+  → Ghi nhớ fail / báo FAIL lên Sheet
+  → Nghỉ ngẫu nhiên (minPost–maxPost giây)
+      ↓
+Đóng Chrome, giải phóng RAM
+      ↓
+Ngủ 60–120 phút → lặp lại
 ```
 
-## 🔐 Lưu ý bảo mật
+---
 
-- Thông tin proxy vẫn lưu dạng plain text trong `profiles.json`
-- Không chia sẻ file `profiles.json` ra ngoài
-- Mỗi profile có thư mục Chrome riêng biệt, không chia sẻ session với nhau
+## 📋 Cấu hình
+
+| Tham số | Mô tả | Mặc định |
+|---|---|---|
+| Giờ bắt đầu | Giờ bot bắt đầu hoạt động | 06:45 |
+| Giờ kết thúc | Giờ bot dừng (hỗ trợ overnight) | 00:30 |
+| Nghỉ min (giây) | Thời gian nghỉ tối thiểu giữa 2 post | 180 |
+| Nghỉ max (giây) | Thời gian nghỉ tối đa giữa 2 post | 360 |
+
+---
+
+## 🔐 Bảo mật
+
+- Thông tin proxy lưu plain text trong `profiles.json` — không chia sẻ file này
+- Mỗi profile có thư mục Chrome riêng, session hoàn toàn tách biệt
+- Preload script dùng `contextIsolation: true` theo best practice của Electron
