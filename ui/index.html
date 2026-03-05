@@ -260,7 +260,7 @@
 <!-- ── HEADER ── -->
 <div class="header">
   <h1>⚡ FB Automation v2</h1>
-  <small>Powered by Playwright &nbsp;|&nbsp; Rebuilt by Claude for reliability</small>
+  <small>Powered by Playwright &nbsp;|&nbsp; Rebuilt for reliability</small>
 </div>
 
 <!-- ── 1. PROFILES ── -->
@@ -313,7 +313,7 @@
 
 <!-- ── 3. SCHEDULE ── -->
 <div class="card">
-  <div class="card-title"><span class="section-index">3</span> Rountines</div>
+  <div class="card-title"><span class="section-index">3</span> Lịch & Tốc độ</div>
 
   <div class="flex" style="margin-bottom:14px; flex-wrap:wrap; gap:14px">
     <div>
@@ -454,8 +454,18 @@ function renderProfiles() {
             <span class="profile-img-label" title="${p.image || ''}" style="color:${imgFile ? 'var(--green)' : 'var(--text-sub)'}">
                 ${imgFile ? '🖼 '+imgFile : 'Chưa có ảnh'}
             </span>
-            <button onclick="pickImage('${name}')" class="btn-orange" style="font-size:11px; padding:4px 8px">🖼 Đổi</button>
+<button onclick="pickImage('${name}')" class="btn-orange" style="font-size:11px; padding:4px 8px">🖼 Đổi</button>
             ${imgFile ? `<button onclick="removeImage('${name}')" class="btn-red" style="font-size:11px; padding:4px 8px">✖ Xóa ảnh</button>` : ''}
+            <input type="number" class="profile-delay-min" placeholder="Min(s)"
+                value="${p.minPost || ''}"
+                title="Nghỉ tối thiểu (giây) – để trống dùng global"
+                onchange="saveDelay('${name}', this)"
+                style="width:58px; font-size:11px; padding:3px 5px; border:1px solid var(--border); border-radius:4px; background:var(--bg); color:var(--text)">
+            <input type="number" class="profile-delay-max" placeholder="Max(s)"
+                value="${p.maxPost || ''}"
+                title="Nghỉ tối đa (giây) – để trống dùng global"
+                onchange="saveDelay('${name}', this)"
+                style="width:58px; font-size:11px; padding:3px 5px; border:1px solid var(--border); border-radius:4px; background:var(--bg); color:var(--text)">
             <button onclick="openManual('${name}')" class="btn-primary" style="font-size:11px; padding:4px 8px">🌐 Mở</button>
         </div>`;
     }).join('');
@@ -509,6 +519,19 @@ async function deleteSelected() {
 async function removeImage(name) {
     profiles = await window.api.updateProfileImage(name, null);
     renderProfiles();
+}
+
+async function saveDelay(name, inputEl) {
+    const row = inputEl.closest('.profile-row');
+    const minVal = parseInt(row.querySelector('.profile-delay-min').value) || null;
+    const maxVal = parseInt(row.querySelector('.profile-delay-max').value) || null;
+    // Validate: min phải <= max nếu cả 2 đều có giá trị
+    if (minVal && maxVal && minVal > maxVal) {
+        inputEl.style.borderColor = 'var(--red)';
+        return;
+    }
+    inputEl.style.borderColor = '';
+    profiles = await window.api.updateProfileDelay(name, minVal, maxVal);
 }
 
 async function pickImage(name) {

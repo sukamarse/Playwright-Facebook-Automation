@@ -5,9 +5,10 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('api', {
     // ── Profile management ──────────────────────────────
     getProfiles:       ()             => ipcRenderer.invoke('get-profiles'),
-    saveProfile:       (name, proxy)  => ipcRenderer.invoke('save-profile', name, proxy),
+    saveProfile:       (name, proxy, minPost, maxPost) => ipcRenderer.invoke('save-profile', name, proxy, minPost, maxPost),
     deleteProfile:     (name)         => ipcRenderer.invoke('delete-profile', name),
     updateProfileImage:(name, imgPath)=> ipcRenderer.invoke('update-profile-image', name, imgPath),
+    updateProfileDelay:(name, min, max) => ipcRenderer.invoke('update-profile-delay', name, min, max),
     selectImage:       ()             => ipcRenderer.invoke('select-image'),
 
     // ── Bot control ─────────────────────────────────────

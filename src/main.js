@@ -148,12 +148,15 @@ function readProfiles() {
             return migrated;
         }
 
-        // Normalize proxy field
+        // Normalize proxy field + per-profile delay
         for (const key of Object.keys(raw)) {
             if (!raw[key].image)  raw[key].image  = null;
             if (!raw[key].proxy || typeof raw[key].proxy !== 'object') {
                 raw[key].proxy = { ip:'', port:'', user:'', pass:'' };
             }
+            // Migration: thêm minPost/maxPost nếu chưa có (null = dùng global)
+            if (raw[key].minPost === undefined) raw[key].minPost = null;
+            if (raw[key].maxPost === undefined) raw[key].maxPost = null;
         }
         return raw;
     } catch (e) {
@@ -180,12 +183,14 @@ function safeProfileDir(profileName) {
 // ─────────────────────────────────────────────
 ipcMain.handle('get-profiles', () => readProfiles());
 
-ipcMain.handle('save-profile', (_e, name, proxyObj) => {
+ipcMain.handle('save-profile', (_e, name, proxyObj, minPost, maxPost) => {
     const profiles = readProfiles();
     if (!profiles[name]) {
-        profiles[name] = { proxy: proxyObj, image: null };
+        profiles[name] = { proxy: proxyObj, image: null, minPost: minPost || null, maxPost: maxPost || null };
     } else {
-        profiles[name].proxy = proxyObj;
+        profiles[name].proxy   = proxyObj;
+        profiles[name].minPost = minPost || null;
+        profiles[name].maxPost = maxPost || null;
     }
     writeProfiles(profiles);
     return profiles;
@@ -195,6 +200,16 @@ ipcMain.handle('delete-profile', (_e, name) => {
     const profiles = readProfiles();
     delete profiles[name];
     writeProfiles(profiles);
+    return profiles;
+});
+
+ipcMain.handle('update-profile-delay', (_e, name, minPost, maxPost) => {
+    const profiles = readProfiles();
+    if (profiles[name]) {
+        profiles[name].minPost = minPost || null;
+        profiles[name].maxPost = maxPost || null;
+        writeProfiles(profiles);
+    }
     return profiles;
 });
 
@@ -307,6 +322,9 @@ ipcMain.on('start-bot', (_e, config) => {
                 endTime,
                 minPost,
                 maxPost,
+                // Per-profile delay: dùng giá trị riêng nếu có, fallback về global
+                minPost: allProfilesObj[profileName]?.minPost || minPost,
+                maxPost: allProfilesObj[profileName]?.maxPost || maxPost,
                 userDataDir: safeProfileDir(profileName),
             });
         }, index * 30_000);

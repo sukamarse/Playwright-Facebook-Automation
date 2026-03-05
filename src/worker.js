@@ -349,12 +349,14 @@ async function humanScroll(page) {
 async function doComment(page, { link, profileImage, comments, minPost, maxPost }, idx, total) {
     log(`→ [${idx+1}/${total}] ${link}`);
 
-    // Navigate
+    // Flush DOM trang trước → GC hint trước khi load trang mới
+    await page.goto('about:blank', { waitUntil: 'commit' }).catch(() => {});
+
+    // Navigate tới link thật
     try {
         await page.goto(link, { timeout: 60_000, waitUntil: 'domcontentloaded' });
     } catch (e) {
         log(`⚠️ Timeout load trang, thử tiếp...`);
-        // Không throw – trang có thể vẫn dùng được
     }
 
     await sleep(rand(1800, 3000));
@@ -364,6 +366,10 @@ async function doComment(page, { link, profileImage, comments, minPost, maxPost 
     // Xác định mode
     const hasImage    = !!(profileImage && fs.existsSync(profileImage));
     const hasComments = comments.length > 0;
+    // Debug: log khi ảnh được set nhưng không tìm thấy file
+    if (profileImage && !hasImage) {
+        log(`⚠️ Ảnh không tìm thấy tại path: ${profileImage}`);
+    }
     let mode = 'TEXT';
     if (hasImage && hasComments) {
         const r = Math.random() * 100;
@@ -378,22 +384,24 @@ async function doComment(page, { link, profileImage, comments, minPost, maxPost 
     // Upload ảnh trước (nếu cần)
     if (mode === 'IMG' || mode === 'BOTH') {
         try {
-            // Tìm nút camera/ảnh trong khu vực comment
+            // Tìm nút camera/ảnh – dùng force:true để xuyên qua dark-mode overlay
             const photoBtn = page.locator('div[role="main"]')
                 .locator('[aria-label*="ảnh" i], [aria-label*="photo" i], [aria-label*="Ảnh" i]')
                 .first();
             if (await photoBtn.isVisible({ timeout: 2000 })) {
-                await photoBtn.click();
+                await photoBtn.click({ force: true, timeout: 5000 });
                 await sleep(500);
             }
+            // Fallback: setInputFiles trực tiếp không cần click nút trước
+            // (Facebook thường accept setInputFiles ngay cả khi chưa click nút ảnh)
             const fileInput = page.locator('div[role="main"]').locator("input[type='file']").last();
             await fileInput.setInputFiles(profileImage, { timeout: 12_000 });
             log(`📸 Đã chọn ảnh, đợi upload...`);
             await sleep(rand(6000, 10000));
         } catch (e) {
             log(`⚠️ Không up được ảnh (bài có thể khóa ảnh): ${e.message}`);
-            if (mode === 'IMG') return false; // chỉ ảnh mà fail → skip
-            mode = 'TEXT'; // fallback sang text
+            if (mode === 'IMG') return false;
+            mode = 'TEXT';
         }
     }
 
@@ -562,9 +570,11 @@ async function runBot(config) {
                     '--disable-backgrounding-occluded-windows',
                     '--disable-renderer-backgrounding',
                     '--disable-hang-monitor',
-                    '--disable-gpu-compositing',      // giảm GPU load khi không cần render đẹp
-                    '--disable-software-rasterizer',  // không dùng software rasterizer
-                    '--js-flags=--max-old-space-size=256', // giới hạn V8 heap mỗi tab ~256MB
+                    '--disable-gpu-compositing',
+                    '--disable-software-rasterizer',
+                    '--js-flags=--max-old-space-size=384', // 384MB – đủ cho FB React, tránh OOM
+                    '--aggressive-cache-discard',           // discard cache trang cũ ngay khi rời đi
+                    '--disable-cache',                      // không giữ HTTP cache trong RAM
                 ],
                 proxy: playwrightProxy
             });
@@ -584,7 +594,7 @@ async function runBot(config) {
                 log(`👆 Nhấn "🌐 Mở" để đăng nhập, sau đó chạy lại.`);
                 setStatus('error');
                 await browser.close().catch(() => {});
-                process.exit(2); // Exit code 2 = session expired
+                process.exit(2);
             }
             log(`✅ Session hợp lệ.`);
 
@@ -595,7 +605,6 @@ async function runBot(config) {
             for (let i = 0; i < links.length; i++) {
                 if (!isRunning) break;
 
-                // Pause gate bên trong vòng lặp
                 while (isPaused && isRunning) {
                     setStatus('paused');
                     await sleep(2000);
@@ -621,26 +630,22 @@ async function runBot(config) {
 
                 if (ok) {
                     successCount++;
-                    // Comment thành công → xóa khỏi failMemory nếu có
                     delete failMemory[link];
                 } else {
                     failCount++;
                     if (failMemory[link] !== undefined && failMemory[link] === cycle - 1) {
-                        // Fail 2 vòng liền kề → ghi FAIL lên Sheet
                         log(`🚫 Link fail 2 vòng liên tiếp, ghi FAIL lên Sheet...`);
                         reportLinkFail(webAppUrl, profileName, link);
-                        delete failMemory[link]; // reset để không spam
+                        delete failMemory[link];
                     } else {
-                        // Lần đầu fail – ghi nhớ, chưa update Sheet
                         failMemory[link] = cycle;
                         log(`⚠️ Link fail lần 1 (vòng ${cycle}), chờ xác nhận vòng sau.`);
                     }
                 }
 
-                // Nghỉ giữa các post (trừ link cuối)
                 if (i < links.length - 1 && isRunning) {
                     const wait = rand(minPost, maxPost);
-                    log(`⏳ Nghỉ ${wait}s trước link tiếp theo...`);
+                    log(`⏳ Nghỉ ${wait}s...`);
                     await sleep(wait * 1000);
                 }
             }
