@@ -1,6 +1,7 @@
 'use strict';
 
 /**
+ * Ver26_06.03
  * WORKER.JS – chạy trong tiến trình con riêng biệt (fork)
  * Mỗi profile = 1 worker riêng, hoàn toàn độc lập.
  *
