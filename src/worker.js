@@ -384,19 +384,11 @@ async function doComment(page, { link, profileImage, comments, minPost, maxPost 
     // Upload ảnh trước (nếu cần)
     if (mode === 'IMG' || mode === 'BOTH') {
         try {
-            // Tìm nút camera/ảnh – dùng force:true để xuyên qua dark-mode overlay
-            const photoBtn = page.locator('div[role="main"]')
-                .locator('[aria-label*="ảnh" i], [aria-label*="photo" i], [aria-label*="Ảnh" i]')
-                .first();
-            if (await photoBtn.isVisible({ timeout: 2000 })) {
-                await photoBtn.click({ force: true, timeout: 5000 });
-                await sleep(500);
-            }
-            // Fallback: setInputFiles trực tiếp không cần click nút trước
-            // (Facebook thường accept setInputFiles ngay cả khi chưa click nút ảnh)
-            const fileInput = page.locator('div[role="main"]').locator("input[type='file']").last();
-            await fileInput.setInputFiles(profileImage, { timeout: 12_000 });
-            log(`📸 Đã chọn ảnh, đợi upload...`);
+            // Giống code cũ: setInputFiles thẳng, không click nút ảnh trước
+            // Toàn trang + .last() – đúng như code v1 đã hoạt động
+            const fileInput = page.locator("input[type='file']").last();
+            await fileInput.setInputFiles(profileImage, { timeout: 10_000 });
+            log(`📸 Đang up ảnh...`);
             await sleep(rand(6000, 10000));
         } catch (e) {
             log(`⚠️ Không up được ảnh (bài có thể khóa ảnh): ${e.message}`);
@@ -414,9 +406,9 @@ async function doComment(page, { link, profileImage, comments, minPost, maxPost 
         return false;
     }
 
-    // Click vào ô comment
+    // Click vào ô comment – force:true vì FB hay có overlay sau khi attach ảnh
     try {
-        await box.click({ timeout: 4000 });
+        await box.click({ force: true, timeout: 4000 });
         await sleep(rand(500, 1000));
     } catch (e) {
         log(`⚠️ Không click được ô comment: ${e.message}`);
