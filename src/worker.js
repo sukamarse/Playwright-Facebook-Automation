@@ -1,7 +1,6 @@
 'use strict';
 
 /**
- * Ver26_06.03
  * WORKER.JS – chạy trong tiến trình con riêng biệt (fork)
  * Mỗi profile = 1 worker riêng, hoàn toàn độc lập.
  *
@@ -18,6 +17,13 @@
 const { chromium } = require('playwright');
 const path = require('path');
 const fs   = require('fs');
+
+// ── Optional feature modules ──────────────────────
+// Nếu thiếu file module → feature đó bị tắt, worker vẫn chạy bình thường
+function tryRequire(modulePath) {
+    try { return require(modulePath); } catch (_) { return null; }
+}
+const deleteOldComments = tryRequire('./deleteOldComments');
 
 // ─────────────────────────────────────────────
 //  STATE
@@ -347,7 +353,7 @@ async function humanScroll(page) {
 // ─────────────────────────────────────────────
 //  DO COMMENT  – logic thực sự đăng comment
 // ─────────────────────────────────────────────
-async function doComment(page, { link, profileImage, comments, minPost, maxPost }, idx, total) {
+async function doComment(page, { link, profileImage, comments, minPost, maxPost, shouldDeleteOld }, idx, total) {
     log(`→ [${idx+1}/${total}] ${link}`);
 
     // Flush DOM trang trước → GC hint trước khi load trang mới
@@ -363,6 +369,14 @@ async function doComment(page, { link, profileImage, comments, minPost, maxPost 
     await sleep(rand(1800, 3000));
     await humanScroll(page);
     await closeOpenChats(page);
+
+    // Xóa comment cũ nếu module có sẵn và profile bật tính năng
+    if (shouldDeleteOld && deleteOldComments) {
+        await deleteOldComments(page, log, rand, sleep, 2).catch(e => {
+            log(`⚠️ Lỗi deleteOldComments: ${e.message}`);
+        });
+        await sleep(rand(800, 1500));
+    }
 
     // Xác định mode
     const hasImage    = !!(profileImage && fs.existsSync(profileImage));
@@ -459,7 +473,8 @@ async function runBot(config) {
     const {
         profileName, proxyObj, profileImage,
         webAppUrl, startTime, endTime,
-        minPost, maxPost, userDataDir
+        minPost, maxPost, userDataDir,
+        deleteOldComments: shouldDeleteOld = false,
     } = config;
 
     if (!fs.existsSync(userDataDir)) fs.mkdirSync(userDataDir, { recursive: true });
@@ -615,7 +630,8 @@ async function runBot(config) {
                     profileImage,
                     comments,
                     minPost,
-                    maxPost
+                    maxPost,
+                    shouldDeleteOld,
                 }, i, links.length).catch(e => {
                     log(`💥 Lỗi không xử lý được link ${i+1}: ${e.message}`);
                     return false;

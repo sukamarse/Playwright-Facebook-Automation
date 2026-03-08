@@ -19,6 +19,23 @@ for (const dir of [DATA_ROOT, CHROME_DATA, LOG_DIR]) {
 }
 
 // ─────────────────────────────────────────────
+//  CAPABILITIES  – scan optional feature modules
+//  Mỗi entry: { file: 'tên file module', key: 'tên feature' }
+//  Nếu file không tồn tại → feature disabled, UI hiện "Not available"
+// ─────────────────────────────────────────────
+const OPTIONAL_FEATURES = [
+    { key: 'deleteOldComments', file: 'deleteOldComments.js' },
+    // Thêm feature mới vào đây
+];
+
+const capabilities = {};
+for (const f of OPTIONAL_FEATURES) {
+    capabilities[f.key] = fs.existsSync(path.join(__dirname, f.file));
+}
+
+ipcMain.handle('get-capabilities', () => capabilities);
+
+// ─────────────────────────────────────────────
 //  STATE
 // ─────────────────────────────────────────────
 let mainWindow   = null;
@@ -157,6 +174,7 @@ function readProfiles() {
             // Migration: thêm minPost/maxPost nếu chưa có (null = dùng global)
             if (raw[key].minPost === undefined) raw[key].minPost = null;
             if (raw[key].maxPost === undefined) raw[key].maxPost = null;
+            if (raw[key].deleteOldComments === undefined) raw[key].deleteOldComments = false;
         }
         return raw;
     } catch (e) {
@@ -208,6 +226,15 @@ ipcMain.handle('update-profile-delay', (_e, name, minPost, maxPost) => {
     if (profiles[name]) {
         profiles[name].minPost = minPost || null;
         profiles[name].maxPost = maxPost || null;
+        writeProfiles(profiles);
+    }
+    return profiles;
+});
+
+ipcMain.handle('update-profile-delete-old', (_e, name, enabled) => {
+    const profiles = readProfiles();
+    if (profiles[name]) {
+        profiles[name].deleteOldComments = !!enabled;
         writeProfiles(profiles);
     }
     return profiles;
@@ -325,6 +352,7 @@ ipcMain.on('start-bot', (_e, config) => {
                 // Per-profile delay: dùng giá trị riêng nếu có, fallback về global
                 minPost: allProfilesObj[profileName]?.minPost || minPost,
                 maxPost: allProfilesObj[profileName]?.maxPost || maxPost,
+                deleteOldComments: allProfilesObj[profileName]?.deleteOldComments || false,
                 userDataDir: safeProfileDir(profileName),
             });
         }, index * 30_000);

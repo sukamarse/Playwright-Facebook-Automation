@@ -253,6 +253,104 @@
     font-weight: 700;
     flex-shrink: 0;
   }
+
+  /* ── Gear button ── */
+  .btn-gear {
+    background: #e9ecef;
+    color: var(--text);
+    border-radius: 6px;
+    padding: 4px 7px;
+    font-size: 14px;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: background .15s, transform .15s;
+  }
+  .btn-gear:hover  { background: #dee2e6; opacity: 1; }
+  .btn-gear.active { background: var(--primary); color: #fff; transform: rotate(45deg); }
+
+  /* ── Profile settings popup ── */
+  .profile-settings-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.45);
+    z-index: 999;
+    justify-content: center;
+    align-items: center;
+  }
+  .profile-settings-overlay.open { display: flex; }
+
+  .profile-settings-box {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 18px 20px 16px;
+    width: 300px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.2);
+  }
+  .ps-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .ps-close {
+    background: none;
+    color: var(--text-sub);
+    font-size: 18px;
+    padding: 0 4px;
+    line-height: 1;
+  }
+  .ps-close:hover { color: var(--red); opacity: 1; }
+
+  .ps-section {
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+    margin-top: 10px;
+  }
+  .ps-section:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+  .ps-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-sub);
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    margin-bottom: 7px;
+  }
+
+  /* ── Toggle switch ── */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .toggle-row span { font-size: 12px; color: var(--text); }
+  .toggle-switch {
+    position: relative;
+    width: 34px; height: 18px;
+    flex-shrink: 0;
+  }
+  .toggle-switch input { display: none; }
+  .toggle-switch .slider {
+    position: absolute; inset: 0;
+    background: #ccc;
+    border-radius: 18px;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .toggle-switch .slider::before {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    left: 2px; top: 2px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform .2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  }
+  .toggle-switch input:checked + .slider { background: var(--red); }
+  .toggle-switch input:checked + .slider::before { transform: translateX(16px); }
 </style>
 </head>
 <body>
@@ -365,17 +463,75 @@
 </div>
 
 <!-- ───────────────────────────────────────── -->
+<!-- ── PROFILE SETTINGS MODAL (bánh răng) ── -->
+<div class="profile-settings-overlay" id="profileSettingsModal">
+  <div class="profile-settings-box">
+    <div class="ps-title">
+      <span>⚙️ Cài đặt: <span id="psProfileName"></span></span>
+      <button class="ps-close" onclick="closeProfileSettings()">✕</button>
+    </div>
+
+    <!-- Ảnh đính kèm -->
+    <div class="ps-section">
+      <div class="ps-label">🖼 Ảnh đính kèm comment</div>
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px">
+        <span id="psImgLabel" style="font-size:12px; color:var(--text-sub); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">Chưa có ảnh</span>
+      </div>
+      <div style="display:flex; gap:6px">
+        <button class="btn-orange" style="flex:1; font-size:12px; padding:5px 8px" onclick="psPickImage()">🖼 Chọn ảnh</button>
+        <button id="psRemoveImgBtn" class="btn-red" style="flex:1; font-size:12px; padding:5px 8px" onclick="psRemoveImage()">✖ Xóa ảnh</button>
+      </div>
+    </div>
+
+    <!-- Delay -->
+    <div class="ps-section">
+      <div class="ps-label">⏳ Delay giữa các post (giây)</div>
+      <div style="display:flex; align-items:center; gap:8px">
+        <input type="number" id="psMinPost" placeholder="Min" style="width:70px; text-align:center; font-size:12px; padding:5px">
+        <span style="color:var(--text-sub); font-weight:700">–</span>
+        <input type="number" id="psMaxPost" placeholder="Max" style="width:70px; text-align:center; font-size:12px; padding:5px">
+        <span style="font-size:11px; color:var(--text-sub)">(trống = global)</span>
+      </div>
+    </div>
+
+    <!-- Xóa comment cũ -->
+    <div class="ps-section">
+      <div id="psDeleteOldRow" class="toggle-row">
+        <span>🗑 Xóa 2 comment cũ trước khi đăng</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="psDeleteOld">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div id="psDeleteOldNA" style="display:none; font-size:11px; color:var(--text-sub); font-style:italic">
+        🗑 Xóa comment cũ — <span style="color:var(--orange); font-weight:600">Not available</span>
+        <span style="font-size:10px">(thiếu deleteOldComments.js)</span>
+      </div>
+    </div>
+
+    <!-- Save -->
+    <div class="ps-section" style="margin-top:14px">
+      <button class="btn-primary" style="width:100%; padding:8px; font-size:13px" onclick="saveProfileSettings()">💾 Lưu</button>
+    </div>
+  </div>
+</div>
+
 <script>
 'use strict';
 
 // ── State ──────────────────────────────────────────
 let profiles = {};
 let allSelected = false;
+let psCurrentProfile = null;
+let capabilities = {}; // { deleteOldComments: true/false, ... }
 
 // ── Init ───────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
     restoreSettings();
-    profiles = await window.api.getProfiles();
+    [profiles, capabilities] = await Promise.all([
+        window.api.getProfiles(),
+        window.api.getCapabilities(),
+    ]);
     renderProfiles();
     registerEvents();
 });
@@ -443,7 +599,8 @@ function renderProfiles() {
     list.innerHTML = names.map(name => {
         const p = profiles[name];
         const hasProxy = p.proxy?.ip;
-        const imgFile  = p.image ? p.image.split(/[\\/]/).pop() : null;
+        // Hiện indicator nhỏ nếu có cài đặt riêng
+        const hasCustom = p.image || p.minPost || p.maxPost || p.deleteOldComments;
 
         return `
         <div class="profile-row" data-profile-name="${name}">
@@ -451,21 +608,8 @@ function renderProfiles() {
             <input type="checkbox" class="profile-check" value="${name}">
             <span class="profile-name" onclick="toggleCheck(this)">${name}</span>
             <span class="badge ${hasProxy ? 'badge-proxy' : 'badge-direct'}">${hasProxy ? 'Proxy' : 'Gốc'}</span>
-            <span class="profile-img-label" title="${p.image || ''}" style="color:${imgFile ? 'var(--green)' : 'var(--text-sub)'}">
-                ${imgFile ? '🖼 '+imgFile : 'Chưa có ảnh'}
-            </span>
-<button onclick="pickImage('${name}')" class="btn-orange" style="font-size:11px; padding:4px 8px">🖼 Đổi</button>
-            ${imgFile ? `<button onclick="removeImage('${name}')" class="btn-red" style="font-size:11px; padding:4px 8px">✖ Xóa ảnh</button>` : ''}
-            <input type="number" class="profile-delay-min" placeholder="Min(s)"
-                value="${p.minPost || ''}"
-                title="Nghỉ tối thiểu (giây) – để trống dùng global"
-                onchange="saveDelay('${name}', this)"
-                style="width:58px; font-size:11px; padding:3px 5px; border:1px solid var(--border); border-radius:4px; background:var(--bg); color:var(--text)">
-            <input type="number" class="profile-delay-max" placeholder="Max(s)"
-                value="${p.maxPost || ''}"
-                title="Nghỉ tối đa (giây) – để trống dùng global"
-                onchange="saveDelay('${name}', this)"
-                style="width:58px; font-size:11px; padding:3px 5px; border:1px solid var(--border); border-radius:4px; background:var(--bg); color:var(--text)">
+            ${hasCustom ? `<span style="font-size:10px; color:var(--primary)" title="Có cài đặt riêng">●</span>` : ''}
+            <button class="btn-gear" onclick="openProfileSettings('${name}')" title="Cài đặt profile">⚙️</button>
             <button onclick="openManual('${name}')" class="btn-primary" style="font-size:11px; padding:4px 8px">🌐 Mở</button>
         </div>`;
     }).join('');
@@ -489,11 +633,11 @@ function showAddModal() {
     $('addModal').classList.add('open');
     setTimeout(() => $('pName').focus(), 100);
 }
-function closeModal()  { $('addModal').classList.remove('open'); }
+function closeModal() { $('addModal').classList.remove('open'); }
 
 async function confirmAdd() {
     const name = $('pName').value.trim();
-    if (!name)         return alert('Vui lòng nhập tên Profile!');
+    if (!name)          return alert('Vui lòng nhập tên Profile!');
     if (profiles[name]) return alert('Tên Profile này đã tồn tại!');
 
     const proxy = {
@@ -516,30 +660,79 @@ async function deleteSelected() {
     renderProfiles();
 }
 
-async function removeImage(name) {
-    profiles = await window.api.updateProfileImage(name, null);
-    renderProfiles();
+// ── Gear modal (profile settings) ─────────────────
+function openProfileSettings(name) {
+    psCurrentProfile = name;
+    const p = profiles[name];
+
+    $('psProfileName').textContent = name;
+
+    // Ảnh
+    const imgFile = p.image ? p.image.split(/[\\/]/).pop() : null;
+    $('psImgLabel').textContent       = imgFile || 'Chưa có ảnh';
+    $('psImgLabel').style.color       = imgFile ? 'var(--green)' : 'var(--text-sub)';
+    $('psRemoveImgBtn').style.display = imgFile ? '' : 'none';
+
+    // Delay
+    $('psMinPost').value = p.minPost || '';
+    $('psMaxPost').value = p.maxPost || '';
+
+    // Xóa comment cũ — ẩn/hiện dựa vào capabilities
+    if (capabilities.deleteOldComments) {
+        $('psDeleteOldRow').style.display = '';
+        $('psDeleteOldNA').style.display  = 'none';
+        $('psDeleteOld').checked = !!p.deleteOldComments;
+    } else {
+        $('psDeleteOldRow').style.display = 'none';
+        $('psDeleteOldNA').style.display  = '';
+    }
+
+    $('profileSettingsModal').classList.add('open');
 }
 
-async function saveDelay(name, inputEl) {
-    const row = inputEl.closest('.profile-row');
-    const minVal = parseInt(row.querySelector('.profile-delay-min').value) || null;
-    const maxVal = parseInt(row.querySelector('.profile-delay-max').value) || null;
-    // Validate: min phải <= max nếu cả 2 đều có giá trị
+function closeProfileSettings() {
+    $('profileSettingsModal').classList.remove('open');
+    psCurrentProfile = null;
+}
+
+async function psPickImage() {
+    const imgPath = await window.api.selectImage();
+    if (!imgPath) return;
+    profiles = await window.api.updateProfileImage(psCurrentProfile, imgPath);
+    // Cập nhật hiển thị trong modal
+    const imgFile = imgPath.split(/[\\/]/).pop();
+    $('psImgLabel').textContent       = imgFile;
+    $('psImgLabel').style.color       = 'var(--green)';
+    $('psRemoveImgBtn').style.display  = '';
+}
+
+async function psRemoveImage() {
+    profiles = await window.api.updateProfileImage(psCurrentProfile, null);
+    $('psImgLabel').textContent       = 'Chưa có ảnh';
+    $('psImgLabel').style.color       = 'var(--text-sub)';
+    $('psRemoveImgBtn').style.display  = 'none';
+}
+
+async function saveProfileSettings() {
+    const name   = psCurrentProfile;
+    const minVal = parseInt($('psMinPost').value) || null;
+    const maxVal = parseInt($('psMaxPost').value) || null;
+
     if (minVal && maxVal && minVal > maxVal) {
-        inputEl.style.borderColor = 'var(--red)';
+        $('psMinPost').style.borderColor = 'var(--red)';
+        $('psMaxPost').style.borderColor = 'var(--red)';
         return;
     }
-    inputEl.style.borderColor = '';
-    profiles = await window.api.updateProfileDelay(name, minVal, maxVal);
-}
+    $('psMinPost').style.borderColor = '';
+    $('psMaxPost').style.borderColor = '';
 
-async function pickImage(name) {
-    const imgPath = await window.api.selectImage();
-    if (imgPath) {
-        profiles = await window.api.updateProfileImage(name, imgPath);
-        renderProfiles();
+    profiles = await window.api.updateProfileDelay(name, minVal, maxVal);
+    if (capabilities.deleteOldComments) {
+        profiles = await window.api.updateProfileDeleteOld(name, $('psDeleteOld').checked);
     }
+
+    closeProfileSettings();
+    renderProfiles();
 }
 
 function openManual(name) {
@@ -594,7 +787,6 @@ function appendLog(msg) {
     line.textContent = msg;
     el.appendChild(line);
 
-    // Auto-scroll nếu user đang ở cuối
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
     if (nearBottom) el.scrollTop = el.scrollHeight;
 }
@@ -615,14 +807,17 @@ function getSelectedProfiles() {
     return Array.from(document.querySelectorAll('.profile-check:checked')).map(cb => cb.value);
 }
 
-// ESC closes modal
+// ESC closes modals
 document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeModal();
+    if (e.key === 'Escape') { closeModal(); closeProfileSettings(); }
 });
 
-// Click outside modal closes it
+// Click outside closes modals
 $('addModal').addEventListener('click', e => {
     if (e.target === $('addModal')) closeModal();
+});
+$('profileSettingsModal').addEventListener('click', e => {
+    if (e.target === $('profileSettingsModal')) closeProfileSettings();
 });
 </script>
 </body>

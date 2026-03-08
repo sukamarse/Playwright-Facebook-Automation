@@ -9,7 +9,11 @@ contextBridge.exposeInMainWorld('api', {
     deleteProfile:     (name)         => ipcRenderer.invoke('delete-profile', name),
     updateProfileImage:(name, imgPath)=> ipcRenderer.invoke('update-profile-image', name, imgPath),
     updateProfileDelay:(name, min, max) => ipcRenderer.invoke('update-profile-delay', name, min, max),
+    updateProfileDeleteOld:(name, enabled) => ipcRenderer.invoke('update-profile-delete-old', name, enabled),
     selectImage:       ()             => ipcRenderer.invoke('select-image'),
+
+    // ── Capabilities ─────────────────────────────────────
+    getCapabilities:   ()             => ipcRenderer.invoke('get-capabilities'),
 
     // ── Bot control ─────────────────────────────────────
     startBot:  (config)      => ipcRenderer.send('start-bot', config),
