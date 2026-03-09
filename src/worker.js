@@ -16,7 +16,90 @@
 
 const { chromium } = require('playwright');
 const path = require('path');
-const fs   = require('fs');
+const fs = require('fs');
+
+// ─────────────────────────────────────────────
+//  STEALTH  – inject trước mọi JS của trang
+// ─────────────────────────────────────────────
+const STEALTH_SCRIPT = `
+(function() {
+    // 1. Xóa dấu hiệu automation rõ nhất
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+
+    // 2. Mock navigator.plugins (Chrome thật có plugins, Playwright thì không)
+    const makePlugin = (name, desc, suf, mimeTypes) => {
+        const plugin = Object.create(Plugin.prototype);
+        Object.defineProperty(plugin, 'name',        { get: () => name });
+        Object.defineProperty(plugin, 'description', { get: () => desc });
+        Object.defineProperty(plugin, 'filename',    { get: () => suf  });
+        Object.defineProperty(plugin, 'length',      { get: () => mimeTypes.length });
+        mimeTypes.forEach((mt, i) => Object.defineProperty(plugin, i, { get: () => mt }));
+        return plugin;
+    };
+    const fakeMime = (type, suf) => {
+        const m = Object.create(MimeType.prototype);
+        Object.defineProperty(m, 'type',        { get: () => type });
+        Object.defineProperty(m, 'suffixes',    { get: () => suf  });
+        Object.defineProperty(m, 'description', { get: () => ''   });
+        return m;
+    };
+    const plugins = [
+        makePlugin('Chrome PDF Plugin',         'Portable Document Format', 'internal-pdf-viewer', [fakeMime('application/x-google-chrome-pdf', 'pdf')]),
+        makePlugin('Chrome PDF Viewer',         '',                         'mhjfbmdgcfjbbpaeojofohoefgiehjai', [fakeMime('application/pdf', 'pdf')]),
+        makePlugin('Native Client',             '',                         'internal-nacl-plugin', [fakeMime('application/x-nacl', ''), fakeMime('application/x-pnacl', '')]),
+    ];
+    Object.defineProperty(navigator, 'plugins', {
+        get: () => Object.assign(Object.create(PluginArray.prototype), { length: plugins.length, ...plugins, item: i => plugins[i], namedItem: n => plugins.find(p => p.name === n) })
+    });
+    Object.defineProperty(navigator, 'mimeTypes', {
+        get: () => Object.assign(Object.create(MimeTypeArray.prototype), { length: 4, item: i => [fakeMime('application/x-google-chrome-pdf','pdf'),fakeMime('application/pdf','pdf'),fakeMime('application/x-nacl',''),fakeMime('application/x-pnacl','')][i] })
+    });
+
+    // 3. Window.chrome object (Playwright không có)
+    if (!window.chrome) {
+        window.chrome = {
+            app: { isInstalled: false, InstallState: { DISABLED:'disabled',INSTALLED:'installed',NOT_INSTALLED:'not_installed' }, RunningState: { CANNOT_RUN:'cannot_run',READY_TO_RUN:'ready_to_run',RUNNING:'running' } },
+            runtime: { PlatformOs: { MAC:'mac',WIN:'win',ANDROID:'android',CROS:'cros',LINUX:'linux',OPENBSD:'openbsd' }, PlatformArch: { ARM:'arm',X86_32:'x86-32',X86_64:'x86-64' }, PlatformNaclArch: { ARM:'arm',X86_32:'x86-32',X86_64:'x86-64' }, RequestUpdateCheckStatus: { THROTTLED:'throttled',NO_UPDATE:'no_update',UPDATE_AVAILABLE:'update_available' }, OnInstalledReason: { INSTALL:'install',UPDATE:'update',CHROME_UPDATE:'chrome_update',SHARED_MODULE_UPDATE:'shared_module_update' }, OnRestartRequiredReason: { APP_UPDATE:'app_update',OS_UPDATE:'os_update',PERIODIC:'periodic' } },
+        };
+    }
+
+    // 4. Permissions.query (Playwright trả 'denied' cho notification → bất thường)
+    const origQuery = window.Permissions?.prototype?.query;
+    if (origQuery) {
+        window.Permissions.prototype.query = function(params) {
+            if (params?.name === 'notifications') {
+                return Promise.resolve({ state: Notification.permission, onchange: null });
+            }
+            return origQuery.call(this, params);
+        };
+    }
+
+    // 5. Ẩn WebGL renderer string gọi Swiftshader (Playwright sử dụng SW renderer)
+    const getParam = WebGLRenderingContext.prototype.getParameter;
+    WebGLRenderingContext.prototype.getParameter = function(param) {
+        if (param === 37445) return 'Intel Open Source Technology Center'; // UNMASKED_VENDOR_WEBGL
+        if (param === 37446) return 'Mesa Intel(R) HD Graphics (SKL GT2)'; // UNMASKED_RENDERER_WEBGL
+        return getParam.call(this, param);
+    };
+})();
+`;
+
+// ─────────────────────────────────────────────
+//  PAGE SETUP  – gọi sau khi có page mới
+// ─────────────────────────────────────────────
+async function setupPage(page) {
+    // Inject stealth trước mọi JS của trang (addInitScript chạy ở mọi navigation)
+    await page.addInitScript(STEALTH_SCRIPT);
+
+    // Block media để tiết kiệm 30–50MB RAM/page (FB autoplay video rất tốn)
+    await page.route('**/*', (route) => {
+        const type = route.request().resourceType();
+        if (type === 'media' || type === 'font') {
+            return route.abort();
+        }
+        return route.continue();
+    });
+}
 
 // ── Optional feature modules ──────────────────────
 // Nếu thiếu file module → feature đó bị tắt, worker vẫn chạy bình thường
@@ -29,7 +112,7 @@ const deleteOldComments = tryRequire('./deleteOldComments');
 //  STATE
 // ─────────────────────────────────────────────
 let isRunning = true;
-let isPaused  = false;
+let isPaused = false;
 
 // ─────────────────────────────────────────────
 //  MESSAGING
@@ -86,8 +169,8 @@ function rand(min, max) {
 // ─────────────────────────────────────────────
 function isTimeAllowed(startStr, endStr) {
     if (!startStr || !endStr) return true;
-    const now  = new Date();
-    const cur  = now.getHours() * 60 + now.getMinutes();
+    const now = new Date();
+    const cur = now.getHours() * 60 + now.getMinutes();
     const [sH, sM] = startStr.split(':').map(Number);
     const [eH, eM] = endStr.split(':').map(Number);
     const s = sH * 60 + sM;
@@ -123,8 +206,8 @@ async function reportFetchTime(webAppUrl, profileName) {
         });
         const url = `${webAppUrl}?action=report&profile=${encodeURIComponent(profileName)}&ts=${encodeURIComponent(ts)}`;
         // fire-and-forget, không cần đợi response
-        fetchWithTimeout(url, 10_000).catch(() => {});
-    } catch (_) {}
+        fetchWithTimeout(url, 10_000).catch(() => { });
+    } catch (_) { }
 }
 
 // ─────────────────────────────────────────────
@@ -133,10 +216,10 @@ async function reportFetchTime(webAppUrl, profileName) {
 async function reportLinkFail(webAppUrl, profileName, link) {
     try {
         const url = `${webAppUrl}?action=fail`
-                  + `&profile=${encodeURIComponent(profileName)}`
-                  + `&link=${encodeURIComponent(link)}`;
-        fetchWithTimeout(url, 10_000).catch(() => {});
-    } catch (_) {}
+            + `&profile=${encodeURIComponent(profileName)}`
+            + `&link=${encodeURIComponent(link)}`;
+        fetchWithTimeout(url, 10_000).catch(() => { });
+    } catch (_) { }
 }
 
 // ─────────────────────────────────────────────
@@ -175,7 +258,7 @@ async function checkSession(page) {
             );
         });
         if (hasLoginForm) return false;
-    } catch (_) {}
+    } catch (_) { }
 
     return true;
 }
@@ -199,7 +282,7 @@ async function hideMessengerDock(page) {
                 });
             });
         });
-    } catch (_) {}
+    } catch (_) { }
     await sleep(300);
 }
 
@@ -216,10 +299,10 @@ async function closeOpenChats(page) {
         try {
             const btns = await page.$$(sel);
             for (const btn of btns) {
-                await btn.click({ force: true }).catch(() => {});
+                await btn.click({ force: true }).catch(() => { });
                 closed++;
             }
-        } catch (_) {}
+        } catch (_) { }
     }
     if (closed > 0) log(`💬 Đã đóng ${closed} cửa sổ chat.`);
     await sleep(500);
@@ -236,7 +319,7 @@ async function findCommentBox(page) {
     // ── Bước 2: Scroll xuống vùng comment ──
     try {
         await page.evaluate(() => window.scrollBy({ top: 400, behavior: 'smooth' }));
-    } catch (_) {}
+    } catch (_) { }
     await sleep(800);
 
     // ── Bước 3: Click nút trigger để mở ô comment ──
@@ -264,13 +347,13 @@ async function findCommentBox(page) {
                 });
                 if (!inMessenger) {
                     await btn.scrollIntoViewIfNeeded();
-                    await btn.click({ timeout: 2000 }).catch(() => {});
+                    await btn.click({ timeout: 2000 }).catch(() => { });
                     await sleep(800);
                     break;
                 }
             }
             break;
-        } catch (_) {}
+        } catch (_) { }
     }
 
     // ── Bước 4: Tìm tất cả textbox trên trang, chọn cái hợp lệ ──
@@ -339,13 +422,13 @@ async function humanScroll(page) {
     for (let i = 0; i < steps; i++) {
         const y = rand(200, 500);
         try { await page.evaluate(y => window.scrollBy({ top: y, behavior: 'smooth' }), y); }
-        catch (_) {}
+        catch (_) { }
         await sleep(rand(800, 2000));
     }
     // Đôi khi scroll lên lại
     if (Math.random() < 0.3) {
         try { await page.evaluate(() => window.scrollBy({ top: -250, behavior: 'smooth' })); }
-        catch (_) {}
+        catch (_) { }
         await sleep(rand(500, 1200));
     }
 }
@@ -354,10 +437,10 @@ async function humanScroll(page) {
 //  DO COMMENT  – logic thực sự đăng comment
 // ─────────────────────────────────────────────
 async function doComment(page, { link, profileImage, comments, minPost, maxPost, shouldDeleteOld }, idx, total) {
-    log(`→ [${idx+1}/${total}] ${link}`);
+    log(`→ [${idx + 1}/${total}] ${link}`);
 
     // Flush DOM trang trước → GC hint trước khi load trang mới
-    await page.goto('about:blank', { waitUntil: 'commit' }).catch(() => {});
+    await page.goto('about:blank', { waitUntil: 'commit' }).catch(() => { });
 
     // Navigate tới link thật
     try {
@@ -379,7 +462,7 @@ async function doComment(page, { link, profileImage, comments, minPost, maxPost,
     }
 
     // Xác định mode
-    const hasImage    = !!(profileImage && fs.existsSync(profileImage));
+    const hasImage = !!(profileImage && fs.existsSync(profileImage));
     const hasComments = comments.length > 0;
     // Debug: log khi ảnh được set nhưng không tìm thấy file
     if (profileImage && !hasImage) {
@@ -493,7 +576,7 @@ async function runBot(config) {
     // Jitter nhỏ khi khởi động: tránh nhiều worker rush vào Chrome/fetch cùng lúc
     // gây spike CPU (bổ sung cho stagger 30s bên main.js)
     const jitter = rand(0, 8000);
-    log(`⏱ Khởi động sau ${(jitter/1000).toFixed(1)}s...`);
+    log(`⏱ Khởi động sau ${(jitter / 1000).toFixed(1)}s...`);
     await sleep(jitter);
 
     setStatus('running');
@@ -543,7 +626,7 @@ async function runBot(config) {
             continue;
         }
 
-        const links    = sheetData.profiles[profileName] || [];
+        const links = sheetData.profiles[profileName] || [];
         const comments = sheetData.comments || [];
 
         // Nếu danh sách link thay đổi so với lần fetch trước → coi như vòng đầu tiên
@@ -569,7 +652,12 @@ async function runBot(config) {
             setStatus('running');
             browser = await chromium.launchPersistentContext(userDataDir, {
                 headless: false,
-                channel:  'chrome',
+                channel: 'chrome',
+                // Viewport ngẫu nhiên trong range phổ biến (anti-fingerprint)
+                viewport: {
+                    width: 1280 + Math.floor(Math.random() * 120),   // 1280–1400
+                    height: 720 + Math.floor(Math.random() * 80),    //  720– 800
+                },
                 args: [
                     '--disable-notifications',
                     '--disable-dev-shm-usage',
@@ -580,19 +668,26 @@ async function runBot(config) {
                     '--disable-hang-monitor',
                     '--disable-gpu-compositing',
                     '--disable-software-rasterizer',
-                    '--js-flags=--max-old-space-size=384', // 384MB – đủ cho FB React, tránh OOM
-                    '--aggressive-cache-discard',           // discard cache trang cũ ngay khi rời đi
-                    '--disable-cache',                      // không giữ HTTP cache trong RAM
+                    '--js-flags=--max-old-space-size=384',
+                    '--aggressive-cache-discard',
+                    // Anti-detection flags
+                    '--disable-blink-features=AutomationControlled', // Xóa navigator.webdriver
+                    '--disable-features=IsolateOrigins,site-per-process', // Giảm process overhead
+                    '--disable-extensions',         // Tiết kiệm 20MB/instance
+                    '--no-first-run',
+                    '--no-default-browser-check',
+                    '--disable-infobars',
                 ],
                 proxy: playwrightProxy
             });
 
             const page = browser.pages()[0] || await browser.newPage();
+            await setupPage(page);  // Stealth + block media
 
             // Mở FB để check session
             try {
                 await page.goto('https://www.facebook.com', { timeout: 60_000, waitUntil: 'domcontentloaded' });
-            } catch (_) {}
+            } catch (_) { }
             await sleep(rand(3000, 5000));
 
             // ── Check session ──
@@ -601,14 +696,14 @@ async function runBot(config) {
                 log(`🔐 SESSION HẾT HẠN hoặc bị Checkpoint! Cần đăng nhập lại thủ công.`);
                 log(`👆 Nhấn "🌐 Mở" để đăng nhập, sau đó chạy lại.`);
                 setStatus('error');
-                await browser.close().catch(() => {});
+                await browser.close().catch(() => { });
                 process.exit(2);
             }
             log(`✅ Session hợp lệ.`);
 
             // ── Vòng lặp qua từng link ──
             let successCount = 0;
-            let failCount    = 0;
+            let failCount = 0;
 
             for (let i = 0; i < links.length; i++) {
                 if (!isRunning) break;
@@ -633,7 +728,7 @@ async function runBot(config) {
                     maxPost,
                     shouldDeleteOld,
                 }, i, links.length).catch(e => {
-                    log(`💥 Lỗi không xử lý được link ${i+1}: ${e.message}`);
+                    log(`💥 Lỗi không xử lý được link ${i + 1}: ${e.message}`);
                     return false;
                 });
 
@@ -666,14 +761,14 @@ async function runBot(config) {
         } finally {
             if (browser) {
                 log(`🧹 Đóng Chrome, giải phóng RAM...`);
-                try { await browser.close(); } catch (_) {}
+                try { await browser.close(); } catch (_) { }
             }
         }
 
         if (!isRunning) break;
 
         const loopWait = rand(60, 120) * 60; // 60–120 phút
-        log(`💤 Xong vòng ${cycle}. Ngủ ${Math.round(loopWait/60)} phút rồi chạy lại...`);
+        log(`💤 Xong vòng ${cycle}. Ngủ ${Math.round(loopWait / 60)} phút rồi chạy lại...`);
         setStatus('sleeping');
         await sleepLong(loopWait * 1000);
         cycle++;
@@ -694,13 +789,13 @@ process.on('message', async (msg) => {
             break;
         case 'stop':
             isRunning = false;
-            isPaused  = false;
+            isPaused = false;
             break;
         case 'pause':
             isPaused = true;
             break;
         case 'resume':
-            isPaused  = false;
+            isPaused = false;
             isRunning = true;
             break;
     }

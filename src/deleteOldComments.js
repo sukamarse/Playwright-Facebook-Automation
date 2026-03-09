@@ -191,36 +191,7 @@ module.exports = async function deleteOldComments(page, log, rand, sleep, maxDel
             await sleep(rand(800, 1200));
 
             // ── BƯỚC 5: Click "Xóa" trong menu FB ──
-
-            // Debug: dump các element có text "Xóa"/"Delete" để biết DOM structure
-            const debugInfo = await page.evaluate(() => {
-                const KEYWORDS = ['xóa', 'delete'];
-                const results = [];
-                const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, {
-                    acceptNode(node) {
-                        if (node.children.length > 0) return NodeFilter.FILTER_SKIP;
-                        const t = (node.textContent?.trim() || '').toLowerCase();
-                        return KEYWORDS.some(k => t === k) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
-                    }
-                });
-                let node;
-                while ((node = walker.nextNode()) && results.length < 10) {
-                    const rect = node.getBoundingClientRect();
-                    let maxZ = 0, pos = 'static';
-                    let a = node.parentElement;
-                    while (a && a !== document.body) {
-                        const st = window.getComputedStyle(a);
-                        const z = parseInt(st.zIndex) || 0;
-                        if (z > maxZ) { maxZ = z; pos = st.position; }
-                        a = a.parentElement;
-                    }
-                    results.push({ tag: node.tagName, text: node.textContent?.trim().slice(0, 30), x: Math.round(rect.left), y: Math.round(rect.top), w: Math.round(rect.width), h: Math.round(rect.height), maxZ, pos });
-                }
-                return results;
-            });
-            log(`\ud83d\uddd1 [DEBUG] Elements Xoa/Delete: ${JSON.stringify(debugInfo)}`);
-
-            // Chiến lược 1: Tìm bằng text + floating check (z-index >= 1)
+            // Tìm element lá có text chính xác "Xóa", không nằm bên phải viewport (Messenger)
             const deleteCoord = await page.evaluate(() => {
                 const KEYWORDS = ['xóa', 'delete', 'xóa bình luận', 'delete comment'];
 
