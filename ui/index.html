@@ -265,8 +265,7 @@
     flex-shrink: 0;
     transition: background .15s, transform .15s;
   }
-  .btn-gear:hover  { background: #dee2e6; opacity: 1; }
-  .btn-gear.active { background: var(--primary); color: #fff; transform: rotate(45deg); }
+  .btn-gear:hover { background: #dee2e6; opacity: 1; }
 
   /* ── Profile settings popup ── */
   .profile-settings-overlay {
@@ -278,7 +277,6 @@
     align-items: center;
   }
   .profile-settings-overlay.open { display: flex; }
-
   .profile-settings-box {
     background: var(--surface);
     border-radius: var(--radius);
@@ -287,68 +285,21 @@
     box-shadow: 0 8px 32px rgba(0,0,0,.2);
   }
   .ps-title {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--primary);
+    font-size: 14px; font-weight: 700; color: var(--primary);
     margin-bottom: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    display: flex; align-items: center; justify-content: space-between;
   }
-  .ps-close {
-    background: none;
-    color: var(--text-sub);
-    font-size: 18px;
-    padding: 0 4px;
-    line-height: 1;
-  }
+  .ps-close { background: none; color: var(--text-sub); font-size: 18px; padding: 0 4px; line-height: 1; }
   .ps-close:hover { color: var(--red); opacity: 1; }
-
-  .ps-section {
-    border-top: 1px solid var(--border);
-    padding-top: 10px;
-    margin-top: 10px;
-  }
+  .ps-section { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; }
   .ps-section:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
-  .ps-label {
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--text-sub);
-    text-transform: uppercase;
-    letter-spacing: .4px;
-    margin-bottom: 7px;
-  }
-
-  /* ── Toggle switch ── */
-  .toggle-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
+  .ps-label { font-size: 10px; font-weight: 700; color: var(--text-sub); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 7px; }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; }
   .toggle-row span { font-size: 12px; color: var(--text); }
-  .toggle-switch {
-    position: relative;
-    width: 34px; height: 18px;
-    flex-shrink: 0;
-  }
+  .toggle-switch { position: relative; width: 34px; height: 18px; flex-shrink: 0; }
   .toggle-switch input { display: none; }
-  .toggle-switch .slider {
-    position: absolute; inset: 0;
-    background: #ccc;
-    border-radius: 18px;
-    cursor: pointer;
-    transition: background .2s;
-  }
-  .toggle-switch .slider::before {
-    content: '';
-    position: absolute;
-    width: 14px; height: 14px;
-    left: 2px; top: 2px;
-    background: #fff;
-    border-radius: 50%;
-    transition: transform .2s;
-    box-shadow: 0 1px 3px rgba(0,0,0,.2);
-  }
+  .toggle-switch .slider { position: absolute; inset: 0; background: #ccc; border-radius: 18px; cursor: pointer; transition: background .2s; }
+  .toggle-switch .slider::before { content: ''; position: absolute; width: 14px; height: 14px; left: 2px; top: 2px; background: #fff; border-radius: 50%; transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
   .toggle-switch input:checked + .slider { background: var(--red); }
   .toggle-switch input:checked + .slider::before { transform: translateX(16px); }
 </style>
@@ -463,38 +414,32 @@
 </div>
 
 <!-- ───────────────────────────────────────── -->
-<!-- ── PROFILE SETTINGS MODAL (bánh răng) ── -->
+<!-- ── PROFILE SETTINGS MODAL ── -->
 <div class="profile-settings-overlay" id="profileSettingsModal">
   <div class="profile-settings-box">
     <div class="ps-title">
-      <span>⚙️ Cài đặt: <span id="psProfileName"></span></span>
+      <span>⚙️ <span id="psProfileName"></span></span>
       <button class="ps-close" onclick="closeProfileSettings()">✕</button>
     </div>
-
-    <!-- Ảnh đính kèm -->
     <div class="ps-section">
       <div class="ps-label">🖼 Ảnh đính kèm comment</div>
-      <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px">
-        <span id="psImgLabel" style="font-size:12px; color:var(--text-sub); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">Chưa có ảnh</span>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span id="psImgLabel" style="font-size:12px;color:var(--text-sub);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Chưa có ảnh</span>
       </div>
-      <div style="display:flex; gap:6px">
-        <button class="btn-orange" style="flex:1; font-size:12px; padding:5px 8px" onclick="psPickImage()">🖼 Chọn ảnh</button>
-        <button id="psRemoveImgBtn" class="btn-red" style="flex:1; font-size:12px; padding:5px 8px" onclick="psRemoveImage()">✖ Xóa ảnh</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn-orange" style="flex:1;font-size:12px;padding:5px 8px" onclick="psPickImage()">🖼 Chọn ảnh</button>
+        <button id="psRemoveImgBtn" class="btn-red" style="flex:1;font-size:12px;padding:5px 8px" onclick="psRemoveImage()">✖ Xóa ảnh</button>
       </div>
     </div>
-
-    <!-- Delay -->
     <div class="ps-section">
       <div class="ps-label">⏳ Delay giữa các post (giây)</div>
-      <div style="display:flex; align-items:center; gap:8px">
-        <input type="number" id="psMinPost" placeholder="Min" style="width:70px; text-align:center; font-size:12px; padding:5px">
-        <span style="color:var(--text-sub); font-weight:700">–</span>
-        <input type="number" id="psMaxPost" placeholder="Max" style="width:70px; text-align:center; font-size:12px; padding:5px">
-        <span style="font-size:11px; color:var(--text-sub)">(trống = global)</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="number" id="psMinPost" placeholder="Min" style="width:70px;text-align:center;font-size:12px;padding:5px">
+        <span style="color:var(--text-sub);font-weight:700">–</span>
+        <input type="number" id="psMaxPost" placeholder="Max" style="width:70px;text-align:center;font-size:12px;padding:5px">
+        <span style="font-size:11px;color:var(--text-sub)">(trống = global)</span>
       </div>
     </div>
-
-    <!-- Xóa comment cũ -->
     <div class="ps-section">
       <div id="psDeleteOldRow" class="toggle-row">
         <span>🗑 Xóa 2 comment cũ trước khi đăng</span>
@@ -503,15 +448,13 @@
           <span class="slider"></span>
         </label>
       </div>
-      <div id="psDeleteOldNA" style="display:none; font-size:11px; color:var(--text-sub); font-style:italic">
-        🗑 Xóa comment cũ — <span style="color:var(--orange); font-weight:600">Not available</span>
+      <div id="psDeleteOldNA" style="display:none;font-size:11px;color:var(--text-sub);font-style:italic">
+        🗑 Xóa comment cũ — <span style="color:var(--orange);font-weight:600">Not available</span>
         <span style="font-size:10px">(thiếu deleteOldComments.js)</span>
       </div>
     </div>
-
-    <!-- Save -->
-    <div class="ps-section" style="margin-top:14px">
-      <button class="btn-primary" style="width:100%; padding:8px; font-size:13px" onclick="saveProfileSettings()">💾 Lưu</button>
+    <div style="margin-top:14px">
+      <button class="btn-primary" style="width:100%;padding:8px;font-size:13px" onclick="saveProfileSettings()">💾 Lưu</button>
     </div>
   </div>
 </div>
@@ -519,13 +462,11 @@
 <script>
 'use strict';
 
-// ── State ──────────────────────────────────────────
 let profiles = {};
 let allSelected = false;
 let psCurrentProfile = null;
-let capabilities = {}; // { deleteOldComments: true/false, ... }
+let capabilities = {};
 
-// ── Init ───────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
     restoreSettings();
     [profiles, capabilities] = await Promise.all([
@@ -541,7 +482,6 @@ window.addEventListener('beforeunload', () => {
     saveSettings();
 });
 
-// ── Settings persistence ───────────────────────────
 function saveSettings() {
     const s = {
         webAppUrl: $('webAppUrl').value,
@@ -564,22 +504,16 @@ function restoreSettings() {
     } catch (_) {}
 }
 
-// ── Events ─────────────────────────────────────────
 function registerEvents() {
     window.api.onLog(appendLog);
-
     window.api.onStateChange(isRunning => {
         $('btnStart').disabled = isRunning;
         $('btnStop').disabled  = !isRunning;
         $('btnStart').style.opacity = isRunning ? '.5' : '1';
     });
-
     window.api.onProfileStatus((profileName, status) => {
         const dot = document.querySelector(`.dot[data-profile="${profileName}"]`);
-        if (dot) {
-            dot.className = `profile-status-dot dot dot-${status}`;
-            dot.title = status;
-        }
+        if (dot) { dot.className = `profile-status-dot dot dot-${status}`; dot.title = status; }
     });
 }
 
@@ -590,34 +524,29 @@ function renderProfiles() {
     $('profileCount').textContent = `${names.length} profile`;
 
     if (names.length === 0) {
-        list.innerHTML = `<div style="padding:20px; text-align:center; color:var(--text-sub); font-size:13px">
-            Chưa có profile nào. Nhấn ➕ Thêm để bắt đầu.
-        </div>`;
+        list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-sub);font-size:13px">Chưa có profile nào. Nhấn ➕ Thêm để bắt đầu.</div>`;
         return;
     }
 
     list.innerHTML = names.map(name => {
         const p = profiles[name];
-        const hasProxy = p.proxy?.ip;
-        // Hiện indicator nhỏ nếu có cài đặt riêng
+        const hasProxy  = p.proxy?.ip;
         const hasCustom = p.image || p.minPost || p.maxPost || p.deleteOldComments;
-
         return `
         <div class="profile-row" data-profile-name="${name}">
             <span class="profile-status-dot dot dot-stopped" data-profile="${name}" title="stopped"></span>
             <input type="checkbox" class="profile-check" value="${name}">
             <span class="profile-name" onclick="toggleCheck(this)">${name}</span>
             <span class="badge ${hasProxy ? 'badge-proxy' : 'badge-direct'}">${hasProxy ? 'Proxy' : 'Gốc'}</span>
-            ${hasCustom ? `<span style="font-size:10px; color:var(--primary)" title="Có cài đặt riêng">●</span>` : ''}
+            ${hasCustom ? `<span style="font-size:10px;color:var(--primary)" title="Có cài đặt riêng">●</span>` : ''}
             <button class="btn-gear" onclick="openProfileSettings('${name}')" title="Cài đặt profile">⚙️</button>
-            <button onclick="openManual('${name}')" class="btn-primary" style="font-size:11px; padding:4px 8px">🌐 Mở</button>
+            <button onclick="openManual('${name}')" class="btn-primary" style="font-size:11px;padding:4px 8px">🌐 Mở</button>
         </div>`;
     }).join('');
 }
 
 function toggleCheck(nameSpan) {
-    const row   = nameSpan.closest('.profile-row');
-    const check = row.querySelector('.profile-check');
+    const check = nameSpan.closest('.profile-row').querySelector('.profile-check');
     check.checked = !check.checked;
 }
 
@@ -639,14 +568,7 @@ async function confirmAdd() {
     const name = $('pName').value.trim();
     if (!name)          return alert('Vui lòng nhập tên Profile!');
     if (profiles[name]) return alert('Tên Profile này đã tồn tại!');
-
-    const proxy = {
-        ip:   $('pIp').value.trim(),
-        port: $('pPort').value.trim(),
-        user: $('pUser').value.trim(),
-        pass: $('pPass').value.trim(),
-    };
-
+    const proxy = { ip: $('pIp').value.trim(), port: $('pPort').value.trim(), user: $('pUser').value.trim(), pass: $('pPass').value.trim() };
     profiles = await window.api.saveProfile(name, proxy);
     renderProfiles();
     closeModal();
@@ -660,24 +582,20 @@ async function deleteSelected() {
     renderProfiles();
 }
 
-// ── Gear modal (profile settings) ─────────────────
+// ── Gear modal ─────────────────────────────────────
 function openProfileSettings(name) {
     psCurrentProfile = name;
     const p = profiles[name];
-
     $('psProfileName').textContent = name;
 
-    // Ảnh
     const imgFile = p.image ? p.image.split(/[\\/]/).pop() : null;
     $('psImgLabel').textContent       = imgFile || 'Chưa có ảnh';
     $('psImgLabel').style.color       = imgFile ? 'var(--green)' : 'var(--text-sub)';
     $('psRemoveImgBtn').style.display = imgFile ? '' : 'none';
 
-    // Delay
     $('psMinPost').value = p.minPost || '';
     $('psMaxPost').value = p.maxPost || '';
 
-    // Xóa comment cũ — ẩn/hiện dựa vào capabilities
     if (capabilities.deleteOldComments) {
         $('psDeleteOldRow').style.display = '';
         $('psDeleteOldNA').style.display  = 'none';
@@ -699,25 +617,23 @@ async function psPickImage() {
     const imgPath = await window.api.selectImage();
     if (!imgPath) return;
     profiles = await window.api.updateProfileImage(psCurrentProfile, imgPath);
-    // Cập nhật hiển thị trong modal
     const imgFile = imgPath.split(/[\\/]/).pop();
     $('psImgLabel').textContent       = imgFile;
     $('psImgLabel').style.color       = 'var(--green)';
-    $('psRemoveImgBtn').style.display  = '';
+    $('psRemoveImgBtn').style.display = '';
 }
 
 async function psRemoveImage() {
     profiles = await window.api.updateProfileImage(psCurrentProfile, null);
     $('psImgLabel').textContent       = 'Chưa có ảnh';
     $('psImgLabel').style.color       = 'var(--text-sub)';
-    $('psRemoveImgBtn').style.display  = 'none';
+    $('psRemoveImgBtn').style.display = 'none';
 }
 
 async function saveProfileSettings() {
     const name   = psCurrentProfile;
     const minVal = parseInt($('psMinPost').value) || null;
     const maxVal = parseInt($('psMaxPost').value) || null;
-
     if (minVal && maxVal && minVal > maxVal) {
         $('psMinPost').style.borderColor = 'var(--red)';
         $('psMaxPost').style.borderColor = 'var(--red)';
@@ -725,12 +641,10 @@ async function saveProfileSettings() {
     }
     $('psMinPost').style.borderColor = '';
     $('psMaxPost').style.borderColor = '';
-
     profiles = await window.api.updateProfileDelay(name, minVal, maxVal);
     if (capabilities.deleteOldComments) {
         profiles = await window.api.updateProfileDeleteOld(name, $('psDeleteOld').checked);
     }
-
     closeProfileSettings();
     renderProfiles();
 }
@@ -743,14 +657,11 @@ function openManual(name) {
 function startBot() {
     const selectedProfiles = getSelectedProfiles();
     if (!selectedProfiles.length) return alert('Vui lòng tick chọn ít nhất 1 Profile!');
-
     const webAppUrl = $('webAppUrl').value.trim();
     if (!webAppUrl.startsWith('https://script.google.com/')) {
         return alert('URL Google Apps Script không hợp lệ.\nVui lòng dán đúng URL từ Google Script.');
     }
-
     saveSettings();
-
     window.api.startBot({
         selectedProfiles,
         allProfilesObj: profiles,
@@ -763,9 +674,7 @@ function startBot() {
 }
 
 function stopBot() {
-    if (confirm('Dừng tất cả tiến trình đang chạy?')) {
-        window.api.stopBot();
-    }
+    if (confirm('Dừng tất cả tiến trình đang chạy?')) window.api.stopBot();
 }
 
 // ── Log ────────────────────────────────────────────
@@ -775,50 +684,32 @@ let logLines = [];
 function appendLog(msg) {
     logLines.push(msg);
     if (logLines.length > LOG_MAX_LINES) logLines.shift();
-
-    const el = $('log');
+    const el   = $('log');
     const line = document.createElement('div');
-
-    if      (msg.includes('❌') || msg.includes('💥') || msg.includes('LỖI') || msg.includes('ERROR')) line.className = 'log-err';
-    else if (msg.includes('⚠️') || msg.includes('WARN')) line.className = 'log-warn';
-    else if (msg.includes('✅') || msg.includes('🎉') || msg.includes('OK'))  line.className = 'log-ok';
-    else if (msg.includes('🔄') || msg.includes('🌐') || msg.includes('🚀'))  line.className = 'log-info';
-
+    if      (msg.includes('❌') || msg.includes('💥') || msg.includes('LỖI')) line.className = 'log-err';
+    else if (msg.includes('⚠️') || msg.includes('WARN'))                       line.className = 'log-warn';
+    else if (msg.includes('✅') || msg.includes('🎉') || msg.includes('OK'))   line.className = 'log-ok';
+    else if (msg.includes('🔄') || msg.includes('🌐') || msg.includes('🚀'))   line.className = 'log-info';
     line.textContent = msg;
     el.appendChild(line);
-
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
     if (nearBottom) el.scrollTop = el.scrollHeight;
 }
 
-function clearLog() {
-    logLines = [];
-    $('log').innerHTML = '';
-}
-
-function openLogFolder() {
-    window.api.openLogFolder();
-}
+function clearLog()     { logLines = []; $('log').innerHTML = ''; }
+function openLogFolder() { window.api.openLogFolder(); }
 
 // ── Utils ───────────────────────────────────────────
 function $(id) { return document.getElementById(id); }
-
 function getSelectedProfiles() {
     return Array.from(document.querySelectorAll('.profile-check:checked')).map(cb => cb.value);
 }
 
-// ESC closes modals
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeModal(); closeProfileSettings(); }
 });
-
-// Click outside closes modals
-$('addModal').addEventListener('click', e => {
-    if (e.target === $('addModal')) closeModal();
-});
-$('profileSettingsModal').addEventListener('click', e => {
-    if (e.target === $('profileSettingsModal')) closeProfileSettings();
-});
+$('addModal').addEventListener('click', e => { if (e.target === $('addModal')) closeModal(); });
+$('profileSettingsModal').addEventListener('click', e => { if (e.target === $('profileSettingsModal')) closeProfileSettings(); });
 </script>
 </body>
 </html>

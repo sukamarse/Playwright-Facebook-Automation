@@ -7,16 +7,46 @@ const { fork } = require('child_process');
 const { chromium } = require('playwright');
 
 // ─────────────────────────────────────────────
-//  PATHS  – cố định tại C:\Playwright
+//  CONFIG  – đọc/ghi từ config.json cạnh main.js
+//  User có thể thay đổi qua UI; fallback về C:\Playwright nếu chưa set
 // ─────────────────────────────────────────────
-const DATA_ROOT      = 'C:\\Playwright';
-const CHROME_DATA    = 'C:\\Playwright\\ChromeData';
-const PROFILES_FILE  = 'C:\\Playwright\\profiles.json';
-const LOG_DIR        = 'C:\\Playwright\\Logs';
+const CONFIG_FILE = path.join(__dirname, 'config.json');
+const CONFIG_DEFAULTS = {
+    dataRoot: 'C:\\Playwright',
+};
 
-for (const dir of [DATA_ROOT, CHROME_DATA, LOG_DIR]) {
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+function readConfig() {
+    try {
+        if (fs.existsSync(CONFIG_FILE)) {
+            return { ...CONFIG_DEFAULTS, ...JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8')) };
+        }
+    } catch (_) {}
+    return { ...CONFIG_DEFAULTS };
 }
+
+function writeConfig(cfg) {
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 4), 'utf-8');
+}
+
+// Paths được tính lại mỗi lần từ config (để hot-reload sau khi user đổi)
+function getPaths(cfg = readConfig()) {
+    const root = cfg.dataRoot;
+    return {
+        DATA_ROOT:     root,
+        CHROME_DATA:   path.join(root, 'ChromeData'),
+        PROFILES_FILE: path.join(root, 'profiles.json'),
+        LOG_DIR:       path.join(root, 'Logs'),
+    };
+}
+
+function ensureDirs(paths) {
+    for (const dir of [paths.DATA_ROOT, paths.CHROME_DATA, paths.LOG_DIR]) {
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    }
+}
+
+// Khởi tạo lần đầu
+ensureDirs(getPaths());
 
 // ─────────────────────────────────────────────
 //  CAPABILITIES  – scan optional feature modules
@@ -122,22 +152,18 @@ function sendLog(msg, profileName = null) {
     const ts   = new Date().toLocaleTimeString('vi-VN');
     const line = profileName ? `[${ts}][${profileName}] ${msg}` : `[${ts}] ${msg}`;
 
-    // Gửi UI ngay lập tức (realtime)
     mainWindow.webContents.send('log-message', line);
 
-    // Đưa vào buffer RAM
     const dateStr = new Date().toISOString().slice(0, 10);
-    const logFile = path.join(LOG_DIR, `${dateStr}.log`);
+    const logFile = path.join(getPaths().LOG_DIR, `${dateStr}.log`);
     _logBuffer.push({ logFile, line });
 
-    // Flush ngay nếu buffer đầy
     if (_logBuffer.length >= LOG_FLUSH_MAX_LINES) {
         if (_logFlushTimer) { clearTimeout(_logFlushTimer); _logFlushTimer = null; }
         flushLogBuffer();
         return;
     }
 
-    // Ngược lại, đặt timer flush sau 60s
     scheduleFlush();
 }
 
@@ -151,11 +177,11 @@ app.on('before-quit', () => {
 //  PROFILE HELPERS
 // ─────────────────────────────────────────────
 function readProfiles() {
+    const { PROFILES_FILE } = getPaths();
     if (!fs.existsSync(PROFILES_FILE)) return {};
     try {
         const raw = JSON.parse(fs.readFileSync(PROFILES_FILE, 'utf-8'));
 
-        // Migration: handle old array format
         if (Array.isArray(raw)) {
             const migrated = {};
             for (const name of raw) {
@@ -165,13 +191,11 @@ function readProfiles() {
             return migrated;
         }
 
-        // Normalize proxy field + per-profile delay
         for (const key of Object.keys(raw)) {
             if (!raw[key].image)  raw[key].image  = null;
             if (!raw[key].proxy || typeof raw[key].proxy !== 'object') {
                 raw[key].proxy = { ip:'', port:'', user:'', pass:'' };
             }
-            // Migration: thêm minPost/maxPost nếu chưa có (null = dùng global)
             if (raw[key].minPost === undefined) raw[key].minPost = null;
             if (raw[key].maxPost === undefined) raw[key].maxPost = null;
             if (raw[key].deleteOldComments === undefined) raw[key].deleteOldComments = false;
@@ -184,16 +208,16 @@ function readProfiles() {
 }
 
 function writeProfiles(profiles) {
+    const { PROFILES_FILE } = getPaths();
     fs.writeFileSync(PROFILES_FILE, JSON.stringify(profiles, null, 4), 'utf-8');
 }
 
 function safeProfileDir(profileName) {
-    // Giữ nguyên logic v1 để tương thích session cũ
     const safe = profileName
         .split('')
         .map(c => /^[\p{L}\p{N}]$/u.test(c) ? c : '_')
         .join('');
-    return path.join(CHROME_DATA, safe);
+    return path.join(getPaths().CHROME_DATA, safe);
 }
 
 // ─────────────────────────────────────────────
@@ -259,10 +283,27 @@ ipcMain.handle('select-image', async () => {
 });
 
 ipcMain.handle('open-log-folder', () => {
-    require('electron').shell.openPath(LOG_DIR);
+    require('electron').shell.openPath(getPaths().LOG_DIR);
 });
 
-ipcMain.handle('get-data-path', () => DATA_ROOT);
+ipcMain.handle('get-data-path', () => getPaths().DATA_ROOT);
+
+// ── Config IPC ──
+ipcMain.handle('get-config', () => readConfig());
+
+ipcMain.handle('save-config', (_e, cfg) => {
+    writeConfig(cfg);
+    ensureDirs(getPaths(cfg));
+    return { ok: true };
+});
+
+ipcMain.handle('select-folder', async () => {
+    const res = await dialog.showOpenDialog(mainWindow, {
+        title: 'Chọn thư mục lưu dữ liệu',
+        properties: ['openDirectory'],
+    });
+    return res.canceled ? null : res.filePaths[0];
+});
 
 // ─────────────────────────────────────────────
 //  IPC – MỞ TRÌNH DUYỆT THỦ CÔNG (ĐĂNG NHẬP)
