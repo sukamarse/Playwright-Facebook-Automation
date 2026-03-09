@@ -434,9 +434,9 @@
     <div class="ps-section">
       <div class="ps-label">⏳ Delay giữa các post (giây)</div>
       <div style="display:flex;align-items:center;gap:8px">
-        <input type="number" id="psMinPost" placeholder="Min" style="width:70px;text-align:center;font-size:12px;padding:5px">
+        <input type="number" id="psMinPost" placeholder="Min" style="width:70px;text-align:center;font-size:12px;padding:5px" onblur="psAutoSaveDelay()">
         <span style="color:var(--text-sub);font-weight:700">–</span>
-        <input type="number" id="psMaxPost" placeholder="Max" style="width:70px;text-align:center;font-size:12px;padding:5px">
+        <input type="number" id="psMaxPost" placeholder="Max" style="width:70px;text-align:center;font-size:12px;padding:5px" onblur="psAutoSaveDelay()">
         <span style="font-size:11px;color:var(--text-sub)">(trống = global)</span>
       </div>
     </div>
@@ -444,7 +444,7 @@
       <div id="psDeleteOldRow" class="toggle-row">
         <span>🗑 Xóa 2 comment cũ trước khi đăng</span>
         <label class="toggle-switch">
-          <input type="checkbox" id="psDeleteOld">
+          <input type="checkbox" id="psDeleteOld" onchange="psAutoSaveDeleteOld()">
           <span class="slider"></span>
         </label>
       </div>
@@ -453,9 +453,7 @@
         <span style="font-size:10px">(thiếu deleteOldComments.js)</span>
       </div>
     </div>
-    <div style="margin-top:14px">
-      <button class="btn-primary" style="width:100%;padding:8px;font-size:13px" onclick="saveProfileSettings()">💾 Lưu</button>
-    </div>
+
   </div>
 </div>
 
@@ -630,8 +628,10 @@ async function psRemoveImage() {
     $('psRemoveImgBtn').style.display = 'none';
 }
 
-async function saveProfileSettings() {
+// Auto-save delay khi blur khỏi input
+async function psAutoSaveDelay() {
     const name   = psCurrentProfile;
+    if (!name) return;
     const minVal = parseInt($('psMinPost').value) || null;
     const maxVal = parseInt($('psMaxPost').value) || null;
     if (minVal && maxVal && minVal > maxVal) {
@@ -642,8 +642,21 @@ async function saveProfileSettings() {
     $('psMinPost').style.borderColor = '';
     $('psMaxPost').style.borderColor = '';
     profiles = await window.api.updateProfileDelay(name, minVal, maxVal);
+    renderProfiles();
+}
+
+// Auto-save khi toggle chế độ xóa comment
+async function psAutoSaveDeleteOld() {
+    const name = psCurrentProfile;
+    if (!name || !capabilities.deleteOldComments) return;
+    profiles = await window.api.updateProfileDeleteOld(name, $('psDeleteOld').checked);
+    renderProfiles();
+}
+
+async function saveProfileSettings() {
+    await psAutoSaveDelay();
     if (capabilities.deleteOldComments) {
-        profiles = await window.api.updateProfileDeleteOld(name, $('psDeleteOld').checked);
+        profiles = await window.api.updateProfileDeleteOld(psCurrentProfile, $('psDeleteOld').checked);
     }
     closeProfileSettings();
     renderProfiles();
