@@ -97,7 +97,10 @@ async function setupPage(page) {
 
     // Bắt event crash (Out of Memory, Breakpoint...)
     page.on('crash', () => {
-        log(`💀 Lỗi hệ thống: Page bị crash (Out of memory / Status Breakpoint)!`);
+        log(`💀 Lỗi hệ thống: Page bị crash (Out of memory / Status Breakpoint)! Đóng browser để khởi động lại...`);
+        page._crashed = true;
+        // Bắt buộc đóng page để tất cả promise đang pending bị reject bằng TargetClosedError, tránh treo vĩnh viễn
+        page.close().catch(() => {});
     });
 
     // Block media để tiết kiệm 30–50MB RAM/page
@@ -463,6 +466,15 @@ async function doComment(page, { link, profileImage, comments, minPost, maxPost,
 
     // Flush DOM trang trước → GC hint trước khi load trang mới
     await page.goto('about:blank', { waitUntil: 'commit' }).catch(() => { });
+    
+    // Ép V8 dọn rác thủ công nhờ cờ --expose-gc
+    try {
+        await page.evaluate(() => {
+            if (typeof window.gc === 'function') {
+                window.gc();
+            }
+        });
+    } catch (_) { }
 
     // Navigate tới link thật
     try {
@@ -732,7 +744,7 @@ async function runBot(config) {
                     '--disable-hang-monitor',
                     '--disable-gpu-compositing',
                     '--disable-software-rasterizer',
-                    '--js-flags=--max-old-space-size=384',
+                    '--js-flags=--max-old-space-size=1024 --expose-gc',
                     '--aggressive-cache-discard',
                     // Anti-detection flags
                     '--disable-blink-features=AutomationControlled', // Xóa navigator.webdriver
@@ -772,6 +784,12 @@ async function runBot(config) {
             for (let i = 0; i < links.length; i++) {
                 if (!isRunning) break;
 
+                // Nếu page đã crash từ link trước, phá vòng lặp để restart
+                if (page.isClosed() || page._crashed) {
+                    log(`🔌 Trình duyệt bị Crash (OOM). Hết bộ nhớ. Đang hủy chu kỳ hiện tại để nạp lại...`);
+                    break;
+                }
+
                 while (isPaused && isRunning) {
                     setStatus('paused');
                     await sleep(2000);
@@ -802,6 +820,12 @@ async function runBot(config) {
                     log(`💥 Lỗi không xử lý được link ${i + 1}: ${e.message}`);
                     return false;
                 });
+
+                // Kiểm tra ngay sau doComment: Nếu văng do Crash thì không tính là FAIL link, break luôn
+                if (page.isClosed() || page._crashed) {
+                    log(`🔌 Trình duyệt bị Crash (OOM) trong lúc xử lý. Hủy chu kỳ hiện tại để nạp lại...`);
+                    break;
+                }
 
                 if (ok === true) {
                     successCount++;
