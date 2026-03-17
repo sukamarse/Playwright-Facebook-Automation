@@ -69,6 +69,10 @@ Mỗi sheet = 1 profile. Tên sheet phải **khớp chính xác** với tên pro
 | Link Facebook | Status (tự động) | Timestamp lần cuối fetch |
 | https://fb.com/... | _(trống)_ | 🕐 Lần cuối fetch: ... |
 | https://fb.com/... | FAIL | |
+| https://fb.com/... | BLOCK | |
+
+- **FAIL**: Link bị lỗi không comment được (thử lại 2 vòng liên tiếp vẫn fail).
+- **BLOCK**: Facebook chặn tính năng comment tại bài viết này (ví dụ: "Giờ bạn chưa dùng được tính năng này"). Bot tự động bỏ qua link này ở các vòng lặp sau trong ngày.
 
 Sheet đặc biệt tên **`comments`** (viết thường) chứa danh sách nội dung comment, mỗi dòng 1 câu.
 
@@ -115,20 +119,30 @@ Nhấn **🖼 Đổi** cạnh tên profile → chọn ảnh JPG/PNG. Bot sẽ đ
 - **Status dot** màu real-time trên từng profile (🟢 running / 🟡 paused / 🔵 sleeping / 🔴 error)
 - **Smart comment box** — 4 lớp bảo vệ tránh nhầm vào Messenger dock
 - **Tự đóng chat popup** trước khi comment
+- **Xóa comment cũ (Tùy chọn)** — Tự động tìm và xóa tối đa 2 comment cũ nhất của chính profile đó trong bài viết trước khi comment mới, giúp tránh bị Facebook filter spam.
 - **3 mode comment**: chỉ text / chỉ ảnh / text + ảnh
 
-### Reliability
+### 🕵️ Anti-Detection (Chống phát hiện Bot)
+- **Stealth Inject Script** — Xóa hoàn toàn cờ `navigator.webdriver`, spoof toàn bộ thông số WebGL, Plugins ảo, Chrome Object để giả lập người thật 100%.
+- **Random Viewport** — Mỗi session sử dụng độ phân giải trình duyệt khác nhau để tránh fingerprinting tĩnh.
+- **Human-like Mouse/Scroll** — Cuộn trang ngẫu nhiên nhiều bước, có khoảng nghỉ ngẫu nhiên mô phỏng người dùng đọc bài.
+- **Fix Notification & Permissions** — Chặn các popup permission ngầm của Chrome (sửa lỗi trả về state bị từ chối ngầm của Playwright).
+
+### 🛡 Reliability & Crash Handling
+- **Tự động xử lý Crash (OOM)** — Bắt sự kiện `page.on('crash')` (Out-of-memory, Status Breakpoint). Khi tab bị văng do Facebook quá nặng, bot tự động bỏ qua và sang link mới mà không bị treo tiến trình vĩnh viễn.
+- **Phát hiện chặn Comment thông minh** — Quét nội dung DOM tìm các thông báo block ("Giờ bạn chưa dùng được tính năng này", "Để bảo vệ cộng đồng", v.v.). Đánh dấu `BLOCK` lên Sheet và lưu vào bộ nhớ tạm để bỏ qua link ở lịch trình tiếp theo.
 - **Auto detect session hết hạn** — dừng ngay và báo thay vì chạy vô ích
 - **Retry với backoff** — lỗi fetch Sheet thử lại tối đa 5 lần (2→4→6→...30 phút)
 - **Fail tracking 2 vòng** — link fail 1 lần chưa ghi, fail 2 vòng liên tiếp mới ghi FAIL lên Sheet
-- **Reset fail memory** khi data Sheet thay đổi
 - **Graceful shutdown** — gửi stop, đợi Chrome đóng sạch trước khi force kill
 
-### Tiết kiệm tài nguyên
+### ⚡ Tiết kiệm tài nguyên
+- **Block Media & Font** — Không load Video (tính năng autoplay của FB rất ngốn RAM), Audio, và Font ngoài → Tiết kiệm 30-50MB RAM môi tab.
 - **sleepLong() chunk 30s** cho các quãng ngủ dài (ngủ giữa vòng, chờ data, ngoài giờ)
 - **setStatus dedup** — không gửi IPC nếu trạng thái không đổi
 - **Log buffer 15 phút** — HDD chỉ bị ghi tối đa 4 lần/giờ
-- **Chrome flags** giảm GPU compositing và giới hạn V8 heap 256MB/tab
+- **Chrome flags cực nhẹ** — Tắt extension, tắt backgrounding ngầm, giới hạn RAM (`--max-old-space-size`).
+
 
 ---
 
@@ -142,7 +156,9 @@ Fetch data từ Google Sheet
 Mở Chrome → Check session
       ↓
 Lặp qua từng link:
-  → Scroll + đóng chat popup
+  → Bỏ qua nếu link nằm trong danh sách BLOCK của session
+  → Scroll ngẫu nhiên mô phỏng người dùng + đóng chat popup
+  → Xóa tối đa 2 comment cũ của mình (nếu tính năng được bật)
   → Tìm ô comment (loại trừ Messenger)
   → Upload ảnh (nếu có)
   → Gõ comment + gửi
