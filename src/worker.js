@@ -88,10 +88,19 @@ const STEALTH_SCRIPT = `
 //  PAGE SETUP  – gọi sau khi có page mới
 // ─────────────────────────────────────────────
 async function setupPage(page) {
-    // Inject stealth trước mọi JS của trang (addInitScript chạy ở mọi navigation)
+    // Inject stealth trước mọi JS của trang
     await page.addInitScript(STEALTH_SCRIPT);
 
-    // Block media để tiết kiệm 30–50MB RAM/page (FB autoplay video rất tốn)
+    // Timeout toàn cục tránh treo mãi mãi khi OOM / page crash
+    page.setDefaultTimeout(30_000);
+    page.setDefaultNavigationTimeout(60_000);
+
+    // Bắt event crash (Out of Memory, Breakpoint...)
+    page.on('crash', () => {
+        log(`💀 Lỗi hệ thống: Page bị crash (Out of memory / Status Breakpoint)!`);
+    });
+
+    // Block media để tiết kiệm 30–50MB RAM/page
     await page.route('**/*', (route) => {
         const type = route.request().resourceType();
         if (type === 'media' || type === 'font') {
@@ -219,6 +228,19 @@ async function reportLinkFail(webAppUrl, profileName, link) {
             + `&profile=${encodeURIComponent(profileName)}`
             + `&link=${encodeURIComponent(link)}`;
         fetchWithTimeout(url, 10_000).catch(() => { });
+    } catch (_) { }
+}
+
+// ─────────────────────────────────────────────
+//  GHI BLOCK STATUS LÊN GOOGLE SHEET (cột B)
+// ─────────────────────────────────────────────
+async function reportLinkBlock(webAppUrl, profileName, link) {
+    try {
+        const url = `${webAppUrl}?action=status`
+            + `&profile=${encodeURIComponent(profileName)}`
+            + `&link=${encodeURIComponent(link)}`
+            + `&status=BLOCK`;
+        fetchWithTimeout(url, 15_000).catch(() => { });
     } catch (_) { }
 }
 
@@ -501,6 +523,25 @@ async function doComment(page, { link, profileImage, comments, minPost, maxPost,
         box = await findCommentBox(page);
     } catch (e) {
         log(`⚠️ ${e.message}`);
+        
+        // Kiểm tra xem có bị check/khóa comment không (Giờ bạn chưa dùng được tính năng này / protect community from spam)
+        const isBlocked = await page.evaluate(() => {
+            const blockedTexts = [
+                'Giờ bạn chưa dùng được tính năng này',
+                'Để bảo vệ cộng đồng khỏi spam',
+                'đã giới hạn người có thể bình luận',
+                'Bạn không thể bình luận',
+                "Bạn hiện không thể trả lời cuộc trò chuyện này"
+            ];
+            const textHTML = document.body.innerText || '';
+            return blockedTexts.some(t => textHTML.includes(t));
+        });
+
+        if (isBlocked) {
+            log(`🚫 TÀI KHOẢN BỊ KHÓA COMMENT TẠM THỜI TẠI BÀI NÀY! Chuyển status sang BLOCK.`);
+            return 'BLOCK';
+        }
+
         return false;
     }
 
@@ -510,6 +551,16 @@ async function doComment(page, { link, profileImage, comments, minPost, maxPost,
         await sleep(rand(500, 1000));
     } catch (e) {
         log(`⚠️ Không click được ô comment: ${e.message}`);
+        // Kiểm tra block trước khi bỏ qua
+        const isBlocked = await page.evaluate(() => {
+            const textHTML = document.body.innerText || '';
+            return textHTML.includes('Giờ bạn chưa dùng được tính năng này') || 
+                   textHTML.includes('Để bảo vệ cộng đồng khỏi spam');
+        });
+        if (isBlocked) {
+            log(`🚫 BỊ KHÓA COMMENT! Chuyển status sang BLOCK.`);
+            return 'BLOCK';
+        }
         return false;
     }
 
@@ -539,6 +590,17 @@ async function doComment(page, { link, profileImage, comments, minPost, maxPost,
         if (await submitBtn.isVisible({ timeout: 1500 })) {
             await submitBtn.click({ force: true });
             await sleep(1000);
+        }
+
+        // Kiểm tra block hiện ra SAU khi nhấn gửi
+        const isBlockedAfterSubmit = await page.evaluate(() => {
+            const html = document.body.innerText || '';
+            return html.includes('Giờ bạn chưa dùng được tính năng này') || 
+                   html.includes('Để bảo vệ cộng đồng khỏi spam');
+        });
+        if (isBlockedAfterSubmit) {
+            log(`🚫 TÀI KHOẢN BỊ KHÓA COMMENT SAU KHI GỬI. Hủy bỏ.`);
+            return 'BLOCK';
         }
 
         log(`✅ Comment thành công.`);
@@ -571,6 +633,8 @@ async function runBot(config) {
     // failMemory: { [link]: cycle_fail_lần_đầu }
     // Chỉ ghi FAIL lên Sheet khi link fail 2 vòng liền kề
     let failMemory = {};
+    // blockMemory: Set lưu các link bị khóa comment, để bỏ qua ở vòng sau
+    let blockMemory = new Set();
     let lastLinkSnapshot = ''; // hash để detect data mới từ Sheet
 
     // Jitter nhỏ khi khởi động: tránh nhiều worker rush vào Chrome/fetch cùng lúc
@@ -720,6 +784,13 @@ async function runBot(config) {
                 }
 
                 const link = links[i];
+                
+                // Bỏ qua nếu link đã bị đánh dấu BLOCK trong session này
+                if (blockMemory.has(link)) {
+                    log(`⛔ Bỏ qua link đã bị đánh dấu BLOCK trước đó: ${link}`);
+                    continue;
+                }
+
                 const ok = await doComment(page, {
                     link,
                     profileImage,
@@ -732,11 +803,17 @@ async function runBot(config) {
                     return false;
                 });
 
-                if (ok) {
+                if (ok === true) {
                     successCount++;
                     delete failMemory[link];
+                } else if (ok === 'BLOCK') {
+                    failCount++;
+                    log(`🛑 Đánh dấu link này là BLOCK để vòng sau bỏ qua.`);
+                    reportLinkBlock(webAppUrl, profileName, link);
+                    blockMemory.add(link);
                 } else {
                     failCount++;
+                    // Khác BLOCK -> tính fail bình thường
                     if (failMemory[link] !== undefined && failMemory[link] === cycle - 1) {
                         log(`🚫 Link fail 2 vòng liên tiếp, ghi FAIL lên Sheet...`);
                         reportLinkFail(webAppUrl, profileName, link);
@@ -767,7 +844,7 @@ async function runBot(config) {
 
         if (!isRunning) break;
 
-        const loopWait = rand(60, 120) * 60; // 60–120 phút
+        const loopWait = rand(30, 90) * 60; // 60–120 phút
         log(`💤 Xong vòng ${cycle}. Ngủ ${Math.round(loopWait / 60)} phút rồi chạy lại...`);
         setStatus('sleeping');
         await sleepLong(loopWait * 1000);

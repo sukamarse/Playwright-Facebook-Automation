@@ -14,6 +14,7 @@ function doGet(e) {
 
   if (action === 'report') return handleReport(e.parameter);
   if (action === 'fail')   return handleFail(e.parameter);
+  if (action === 'status') return handleStatus(e.parameter);
 
   return handleGetData();
 }
@@ -101,6 +102,60 @@ function handleFail(params) {
         sheet.getRange(r + 1, 2).setValue('FAIL'); // cột B
         return ContentService
           .createTextOutput(JSON.stringify({ ok: true, row: r + 1 }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: 'link not found in sheet' }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (e) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: e.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ─────────────────────────────────────────────
+//  handleStatus – nhận custom status từ bot, ghi vào cột B
+//  Params: profile=<tên>, link=<url>, status=<string>
+// ─────────────────────────────────────────────
+function handleStatus(params) {
+  var profileName = params && params.profile ? params.profile : '';
+  var link        = params && params.link    ? params.link    : '';
+  var statusValue = params && params.status  ? params.status  : 'UNKNOWN';
+
+  if (!profileName || !link) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: 'missing params' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  try {
+    var ss    = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(profileName);
+
+    if (!sheet) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: false, error: 'sheet not found' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var lastRow = sheet.getLastRow();
+    if (lastRow === 0) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: false, error: 'empty sheet' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // Tìm link trong cột A
+    var colA = sheet.getRange(1, 1, lastRow, 1).getValues();
+    for (var r = 0; r < colA.length; r++) {
+      if (colA[r][0] && colA[r][0].toString().trim() === link.trim()) {
+        sheet.getRange(r + 1, 2).setValue(statusValue.toUpperCase()); // cột B
+        return ContentService
+          .createTextOutput(JSON.stringify({ ok: true, row: r + 1, status: statusValue }))
           .setMimeType(ContentService.MimeType.JSON);
       }
     }
